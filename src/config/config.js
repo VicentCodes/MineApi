@@ -44,7 +44,14 @@ function setMinecraftPath(newPath) {
 // Obtiene la ruta del servidor API (inicializada a admin_base_path si faltaba)
 function getApiPath() {
   const cfg = _readConfig();
+  // retrocede dos niveles desde admin_base_path
+    if (!cfg.api_server_path) {
+    cfg.api_server_path = path.join(admin_base_path, '..', '..');
+    _writeConfig(cfg);
+    }
+    console.log(`Ruta del servidor API: ${cfg.api_server_path}`);
   return cfg.api_server_path;
+
 }
 
 // Actualiza la ruta del servidor API en el JSON
