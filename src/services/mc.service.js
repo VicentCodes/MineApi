@@ -3,7 +3,11 @@ const path = require('path');
 const { execFile, exec, execSync } = require('child_process');
 const { getMinecraftPath, setMinecraftPath, admin_base_path } = require('../config/config');
 
-// Archivos y utilidades generales
+// Archivo para la hora de apagado
+function getLastStoppedFilePath() {
+  return path.join(getMinecraftPath(), '.bedrock_server_last_stopped');
+}
+
 function mcFile(subpath) {
   return path.join(getMinecraftPath(), subpath);
 }
@@ -15,12 +19,10 @@ function readJSON(file) {
     return [];
   }
 }
-
 function writeJSON(file, data) {
   fs.writeFileSync(file, JSON.stringify(data, null, 2));
 }
 
-// Función para reiniciar el servidor (igual que antes)
 async function restartServer() {
   return new Promise((resolve, reject) => {
     const script = path.join(admin_base_path, 'scripts', 'reiniciar_con_avisos.sh');
@@ -34,40 +36,35 @@ async function restartServer() {
   });
 }
 
-// Devuelve la ruta al archivo de estado
-function getLastStoppedFilePath() {
-  return path.join(getMinecraftPath(), '.bedrock_server_last_stopped');
-}
-
-// Detecta el PID del proceso real del servidor
-function getServerPID() {
-  try {
-    const out = execSync("pgrep -f bedrock_server").toString().split('\n')[0];
-    return out.trim() || null;
-  } catch {
-    return null;
-  }
-}
-
-// Devuelve true/false si el server está corriendo
+// USAR MÉTODO ORIGINAL PARA TU ENTORNO
 function isServerRunning() {
-  const pid = getServerPID();
-  return !!pid && pid !== "";
+  try {
+    const out = execSync('ps aux | grep bedrock_server | grep -v grep').toString();
+    return out.includes('bedrock_server');
+  } catch {
+    return false;
+  }
 }
 
-// Devuelve el uptime (ejemplo: "01:03:27" o "2-03:14:08")
+// Uptime usando el PID del proceso (si existe)
 function getServerUptime() {
-  const pid = getServerPID();
-  if (!pid) return null;
   try {
-    const out = execSync(`ps -o etime= -p ${pid}`).toString();
-    return out.trim();
+    // Buscar el PID usando ps aux
+    const out = execSync('ps aux | grep bedrock_server | grep -v grep').toString().trim();
+    if (!out) return null;
+    // La columna 2 es el PID
+    const lines = out.split('\n');
+    if (lines.length === 0) return null;
+    const pid = lines[0].split(/\s+/)[1];
+    if (!pid) return null;
+    // Consultar el uptime de ese PID
+    const etime = execSync(`ps -o etime= -p ${pid}`).toString().trim();
+    return etime;
   } catch {
     return null;
   }
 }
 
-// Devuelve la última hora de apagado (string ISO)
 function getLastStoppedTime() {
   const file = getLastStoppedFilePath();
   if (fs.existsSync(file)) {
@@ -76,25 +73,21 @@ function getLastStoppedTime() {
   return null;
 }
 
-// Escribe la hora actual como hora de apagado
 function setLastStoppedTime() {
   const file = getLastStoppedFilePath();
   fs.writeFileSync(file, new Date().toISOString());
 }
 
-// Borra el archivo de estado (si el server está encendido)
 function clearLastStoppedTime() {
   const file = getLastStoppedFilePath();
   if (fs.existsSync(file)) fs.unlinkSync(file);
 }
 
-// Línea de cron (sin cambios)
 function getCronLine() {
   const script = path.join(admin_base_path, 'scripts', 'backup_manual.sh');
   return `0 */4 * * * bash ${script} "${getMinecraftPath()}"`;  
 }
 
-// Exporta todo
 module.exports = {
   mcFile,
   readJSON,
