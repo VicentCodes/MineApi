@@ -4,7 +4,6 @@ const { exec, execFile } = require('child_process');
 const { getMinecraftPath, setMinecraftPath, admin_base_path } = require('../config/config');
 const { isServerRunning, restartServer, getCronLine ,
   getServerUptime,
-  getLastStoppedTime,
   setLastStoppedTime} = require('../services/mc.service');
 
 // GET /api/server/path
