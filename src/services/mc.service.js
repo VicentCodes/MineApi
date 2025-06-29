@@ -75,9 +75,6 @@ function getServerUptime() {
     return null;
   }
 }
-
-
-
 function setLastStoppedTime() {
   const file = getLastStoppedFilePath();
   const dir = path.dirname(file);
