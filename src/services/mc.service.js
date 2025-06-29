@@ -45,11 +45,52 @@ function getCronLine() {
   return `0 */4 * * * bash ${script} "${getMinecraftPath()}"`;  
 }
 
+const LAST_STOPPED_FILE = path.join(getMinecraftPath(), '.bedrock_server_last_stopped');
+
+function getServerPID() {
+  try {
+    const out = execSync("pgrep -f bedrock_server").toString().split('\n')[0];
+    return out.trim();
+  } catch {
+    return null;
+  }
+}
+
+function isServerRunning() {
+  return !!getServerPID();
+}
+
+function getServerUptime() {
+  const pid = getServerPID();
+  if (!pid) return null;
+  try {
+    const out = execSync(`ps -o etime= -p ${pid}`).toString();
+    return out.trim();
+  } catch {
+    return null;
+  }
+}
+
+function getLastStoppedTime() {
+  if (fs.existsSync(LAST_STOPPED_FILE)) {
+    return fs.readFileSync(LAST_STOPPED_FILE, 'utf8');
+  }
+  return null;
+}
+
+function setLastStoppedTime() {
+  fs.writeFileSync(LAST_STOPPED_FILE, new Date().toISOString());
+}
+
+
 module.exports = {
   mcFile,
   readJSON,
   writeJSON,
   restartServer,
   isServerRunning,
-  getCronLine
+  getCronLine,
+  getServerUptime,
+  getLastStoppedTime,
+  setLastStoppedTime
 };

@@ -41,24 +41,23 @@ function setMinecraftPath(newPath) {
   _writeConfig(cfg);
 }
 
-// Obtiene la ruta del servidor API (inicializada a admin_base_path si faltaba)
+// Obtiene la ruta del servidor API SIN retroceder dos niveles
 function getApiPath() {
   const cfg = _readConfig();
-  // retrocede dos niveles desde admin_base_path
-    if (!cfg.api_server_path) {
-    cfg.api_server_path = path.join(admin_base_path, '..', '..');
-    _writeConfig(cfg);
-    }
-    console.log(`Ruta del servidor API: ${cfg.api_server_path}`);
-  return cfg.api_server_path;
-
+  return cfg.api_server_path || admin_base_path;
 }
 
-// Actualiza la ruta del servidor API en el JSON
+// Actualiza la ruta del servidor API en el JSON, creando el directorio si hace falta
 function setApiPath(newPath) {
   const cfg = _readConfig();
-  cfg.api_server_path = newPath;
+  cfg.api_server_path = path.resolve(newPath);
   _writeConfig(cfg);
+
+  if (!fs.existsSync(cfg.api_server_path)) {
+    fs.mkdirSync(cfg.api_server_path, { recursive: true });
+  }
+
+  return cfg.api_server_path;
 }
 
 module.exports = {
