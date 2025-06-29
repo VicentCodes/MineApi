@@ -2,7 +2,7 @@ const fsSrv = require('fs');
 const pathSrv = require('path');
 const { exec, execFile } = require('child_process');
 const { getMinecraftPath, setMinecraftPath, admin_base_path } = require('../config/config');
-const { isServerRunning, restartServer, getCronLine ,isServerRunning,
+const { isServerRunning, restartServer, getCronLine ,
   getServerUptime,
   getLastStoppedTime,
   setLastStoppedTime} = require('../services/mc.service');
