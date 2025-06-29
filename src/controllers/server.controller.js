@@ -2,9 +2,13 @@ const fsSrv = require('fs');
 const pathSrv = require('path');
 const { exec, execFile } = require('child_process');
 const { getMinecraftPath, setMinecraftPath, admin_base_path } = require('../config/config');
-const { isServerRunning, restartServer, getCronLine ,
-  getServerUptime,
-  setLastStoppedTime} = require('../services/mc.service');
+const { 
+  isServerRunning, 
+  getServerUptime, 
+  getLastStoppedTime, 
+  setLastStoppedTime, 
+  clearLastStoppedTime 
+} = require('../services/mc.service');
 
 // GET /api/server/path
 exports.getPath = (req, res, next) => {
@@ -52,17 +56,9 @@ exports.status = (req, res, next) => {
 
     if (serverEncendido) {
       uptime = getServerUptime();
-      // Elimina el archivo si el server está encendido
-      const fs = require('fs');
-      const path = require('path');
-      const { getMinecraftPath } = require('../config/config');
-      const LAST_STOPPED_FILE = path.join(getMinecraftPath(), '.bedrock_server_last_stopped');
-      if (fs.existsSync(LAST_STOPPED_FILE)) fs.unlinkSync(LAST_STOPPED_FILE);
+      clearLastStoppedTime();
     } else {
-      // Solo guarda la hora si no existe
-      if (!getLastStoppedTime()) {
-        setLastStoppedTime();
-      }
+      if (!getLastStoppedTime()) setLastStoppedTime();
       lastStopped = getLastStoppedTime();
     }
 
@@ -75,6 +71,7 @@ exports.status = (req, res, next) => {
     next(e);
   }
 };
+
 
 
 // POST /api/server/send-message
