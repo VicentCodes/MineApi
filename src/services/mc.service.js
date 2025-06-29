@@ -103,6 +103,5 @@ module.exports = {
   getCronLine,
   getServerUptime,
   getLastStoppedTime,
-  setLastStoppedTime,
   clearLastStoppedTime
 };
