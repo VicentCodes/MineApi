@@ -8,7 +8,6 @@ function getLastStoppedFilePath() {
   return path.join(__dirname, '..', 'config', '.bedrock_server_last_stopped');
 }
 
-
 function mcFile(subpath) {
   return path.join(getMinecraftPath(), subpath);
 }
@@ -20,6 +19,7 @@ function readJSON(file) {
     return [];
   }
 }
+
 function writeJSON(file, data) {
   fs.writeFileSync(file, JSON.stringify(data, null, 2));
 }
@@ -37,6 +37,7 @@ async function restartServer() {
   });
 }
 
+// Solo UNA vez esta función:
 function setLastStoppedTime() {
   const file = getLastStoppedFilePath();
   const dir = path.dirname(file);
@@ -46,6 +47,13 @@ function setLastStoppedTime() {
   fs.writeFileSync(file, new Date().toISOString());
 }
 
+function getLastStoppedTime() {
+  const file = getLastStoppedFilePath();
+  if (fs.existsSync(file)) {
+    return fs.readFileSync(file, 'utf8');
+  }
+  return null;
+}
 
 // USAR MÉTODO ORIGINAL PARA TU ENTORNO
 function isServerRunning() {
@@ -60,28 +68,17 @@ function isServerRunning() {
 // Uptime usando el PID del proceso (si existe)
 function getServerUptime() {
   try {
-    // Buscar el PID usando ps aux
     const out = execSync('ps aux | grep bedrock_server | grep -v grep').toString().trim();
     if (!out) return null;
-    // La columna 2 es el PID
     const lines = out.split('\n');
     if (lines.length === 0) return null;
     const pid = lines[0].split(/\s+/)[1];
     if (!pid) return null;
-    // Consultar el uptime de ese PID
     const etime = execSync(`ps -o etime= -p ${pid}`).toString().trim();
     return etime;
   } catch {
     return null;
   }
-}
-function setLastStoppedTime() {
-  const file = getLastStoppedFilePath();
-  const dir = path.dirname(file);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  fs.writeFileSync(file, new Date().toISOString());
 }
 
 function clearLastStoppedTime() {
@@ -103,5 +100,6 @@ module.exports = {
   getCronLine,
   getServerUptime,
   getLastStoppedTime,
+  setLastStoppedTime,
   clearLastStoppedTime
 };
