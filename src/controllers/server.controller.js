@@ -4,7 +4,7 @@ const { exec, execFile } = require('child_process');
 const { getMinecraftPath, setMinecraftPath, admin_base_path } = require('../config/config');
 const { 
   isServerRunning, 
-  getServerUptime, 
+  getServerStartTime, 
   getLastStoppedTime, 
   setLastStoppedTime, 
   clearLastStoppedTime 
@@ -55,7 +55,7 @@ exports.status = (req, res, next) => {
     let lastStopped = null;
 
     if (serverEncendido) {
-      uptime = getServerUptime();
+      uptime = getServerStartTime();   // <-- CAMBIA aquí
       clearLastStoppedTime();
     } else {
       if (!getLastStoppedTime()) setLastStoppedTime();
