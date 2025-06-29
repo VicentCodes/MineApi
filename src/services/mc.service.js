@@ -5,8 +5,9 @@ const { getMinecraftPath, setMinecraftPath, admin_base_path } = require('../conf
 
 // Archivo para la hora de apagado
 function getLastStoppedFilePath() {
-  return path.join(getMinecraftPath(), '.bedrock_server_last_stopped');
+  return path.join(__dirname, '..', 'config', '.bedrock_server_last_stopped');
 }
+
 
 function mcFile(subpath) {
   return path.join(getMinecraftPath(), subpath);
@@ -35,6 +36,16 @@ async function restartServer() {
     });
   });
 }
+
+function setLastStoppedTime() {
+  const file = getLastStoppedFilePath();
+  const dir = path.dirname(file);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  fs.writeFileSync(file, new Date().toISOString());
+}
+
 
 // USAR MÉTODO ORIGINAL PARA TU ENTORNO
 function isServerRunning() {
@@ -65,16 +76,14 @@ function getServerUptime() {
   }
 }
 
-function getLastStoppedTime() {
-  const file = getLastStoppedFilePath();
-  if (fs.existsSync(file)) {
-    return fs.readFileSync(file, 'utf8');
-  }
-  return null;
-}
+
 
 function setLastStoppedTime() {
   const file = getLastStoppedFilePath();
+  const dir = path.dirname(file);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
   fs.writeFileSync(file, new Date().toISOString());
 }
 
