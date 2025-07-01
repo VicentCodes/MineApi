@@ -19,129 +19,265 @@ exports.getPath = (req, res, next) => {
 exports.setPath = (req, res, next) => {
   try {
     const { newPath } = req.body;
-    if (fsSrv.existsSync(newPath)) {
-      setMinecraftPath(newPath);
-      res.json({ message: 'Ruta actualizada', path: getMinecraftPath() });
-    } else {
-      res.status(400).json({ error: 'La ruta no existe' });
-    }
-  } catch(e) { next(e); }
-};
 
-// GET /api/server
-exports.getInfo = (req, res, next) => {
-  try {
-    const mensajesPath = pathSrv.join(admin_base_path, 'config', 'mensajes.json');
-    let mensajes = { bienvenida:'', noticias:'', despedida:'' };
-    try { mensajes = JSON.parse(fsSrv.readFileSync(mensajesPath,'utf8')); } catch {}
-    const lvlJson = pathSrv.join(getMinecraftPath(),'mundoActivo.json');
-    let mundoActivo = '';
-    try { mundoActivo = JSON.parse(fsSrv.readFileSync(lvlJson,'utf8'))['level-name']; } catch{}
-    const backupsDir = pathSrv.join(getMinecraftPath(),'backups','mundos');
-    let backups = [];
-    try { backups = fsSrv.readdirSync(backupsDir).filter(f=>f.endsWith('.zip')).map(f=>({filename:f,label:f})); } catch{}
-    const serverEncendido = isServerRunning();
-    let cronActivo=false;
-    try { cronActivo = execSync('crontab -l').toString().includes(getCronLine()); } catch{}
-    res.json({ mensajes, mundoActivo, backups, serverEncendido, cronActivo });
-  } catch(e){ next(e); }
-};
-
-// GET /api/server/status
-exports.status = (req, res, next) => {
-  try {
-    const serverEncendido = isServerRunning();
-    let uptime = null;
-    let lastStopped = null;
-
-    if (serverEncendido) {
-      uptime = getServerStartTime();   // <-- CAMBIA aquí
-      clearLastStoppedTime();
-    } else {
-      if (!getLastStoppedTime()) setLastStoppedTime();
-      lastStopped = getLastStoppedTime();
+    if (!fsSrv.existsSync(newPath)) {
+      return res.status(400).json({ error: "Path does not exist" });
     }
 
+    setMinecraftPath(newPath);
     res.json({
-      serverEncendido,
-      ...(uptime && { uptime }),
-      ...(lastStopped && { lastStopped })
+      message: "Path updated successfully",
+      path: getMinecraftPath(),
     });
-  } catch(e) {
-    next(e);
+  } catch (err) {
+    next(err);
   }
 };
 
 
+// GET /api/server
+exports.getInfo = (req, res, next) => {
+  try {
+    const mensajesPath = pathSrv.join(
+      admin_base_path,
+      "config",
+      "mensajes.json"
+    );
+    const lvlJsonPath = pathSrv.join(getMinecraftPath(), "mundoActivo.json");
+    const backupsDir = pathSrv.join(getMinecraftPath(), "backups", "mundos");
+
+    let mensajes = { bienvenida: "", noticias: "", despedida: "" };
+    try {
+      mensajes = JSON.parse(fsSrv.readFileSync(mensajesPath, "utf8"));
+    } catch {
+      // default mensajes if file missing or invalid
+    }
+
+    let mundoActivo = "";
+    try {
+      const lvlData = JSON.parse(fsSrv.readFileSync(lvlJsonPath, "utf8"));
+      mundoActivo = lvlData["level-name"] || "";
+    } catch {}
+
+    let backups = [];
+    try {
+      backups = fsSrv
+        .readdirSync(backupsDir)
+        .filter((file) => file.endsWith(".zip"))
+        .map((file) => ({ filename: file, label: file }));
+    } catch {}
+
+    const serverEncendido = isServerRunning();
+
+    let cronActivo = false;
+    try {
+      const crontab = execSync("crontab -l").toString();
+      cronActivo = crontab.includes(getCronLine());
+    } catch {
+      // crontab might not exist
+    }
+
+    res.json({
+      mensajes,
+      mundoActivo,
+      backups,
+      serverEncendido,
+      cronActivo,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+
+// GET /api/server/status
+exports.status = (req, res, next) => {
+  try {
+    const serverRunning = isServerRunning();
+    let uptime = null;
+    let lastStopped = null;
+
+    if (serverRunning) {
+      uptime = getServerStartTime(); 
+      clearLastStoppedTime(); 
+    } else {
+      if (!getLastStoppedTime()) {
+        setLastStoppedTime();
+      }
+      lastStopped = getLastStoppedTime();
+    }
+
+    res.json({
+      serverRunning,
+      ...(uptime && { uptime }),
+      ...(lastStopped && { lastStopped }),
+    });
+  } catch (err) {
+    next(err);
+  }
+};
 
 // POST /api/server/send-message
 exports.sendMessage = (req, res, next) => {
   try {
-    const msg = req.body.mensaje?.trim();
-    if (!msg) return res.status(400).json({ error:'Mensaje vacío' });
-    const cmd = `screen -S minecraft_server -p 0 -X stuff 'say ${msg.replace(/'/g,"\\'")}\\r'`;
-    exec(cmd, err=>{ if(err) console.error(err); });
-    res.json({ message:'Mensaje enviado' });
-  } catch(e){ next(e); }
+    const message = req.body.mensaje?.trim();
+
+    if (!message) {
+      return res.status(400).json({ error: "Empty message" });
+    }
+
+    const escapedMessage = message.replace(/'/g, "\\'");
+    const cmd = `screen -S minecraft_server -p 0 -X stuff 'say ${escapedMessage}\\r'`;
+
+    exec(cmd, (err) => {
+      if (err) {
+        console.error("Error sending message to server:", err);
+      }
+    });
+
+    res.json({ message: "Message sent" });
+  } catch (err) {
+    next(err);
+  }
 };
+
 
 // POST /api/server/shutdown
 exports.shutdown = (req, res, next) => {
   try {
-    const minutos = parseInt(req.body.tiempo,10);
-    if (![0,2,5,10].includes(minutos)) return res.status(400).json({error:'Tiempo no válido'});
-    const script = pathSrv.join(admin_base_path,'scripts','apagar_con_avisos.sh');
-    exec(`bash ${script} ${minutos}`, err=>{ if(err) console.error(err); });
-    res.json({ message:`Apagado en ${minutos} minutos` });
-  } catch(e){ next(e); }
+    const minutes = parseInt(req.body.tiempo, 10);
+
+    if (![0, 2, 5, 10].includes(minutes)) {
+      return res.status(400).json({ error: "Invalid shutdown time" });
+    }
+
+    const scriptPath = pathSrv.join(
+      admin_base_path,
+      "scripts",
+      "apagar_con_avisos.sh"
+    );
+    const cmd = `bash ${scriptPath} ${minutes}`;
+
+    exec(cmd, (err) => {
+      if (err) {
+        console.error("Error executing shutdown script:", err);
+      }
+    });
+
+    res.json({ message: `Server will shut down in ${minutes} minute(s)` });
+  } catch (err) {
+    next(err);
+  }
 };
+
 
 // POST /api/server/restart
 exports.restart = async (req, res, next) => {
-  try { await restartServer(); res.json({ message:'Servidor reiniciado' }); } catch(e){ next(e); }
+  try {
+    await restartServer();
+    res.json({ message: "Server restarted" });
+  } catch (err) {
+    next(err);
+  }
 };
+
 
 // POST /api/server/backup
 exports.backup = (req, res, next) => {
   try {
-    const rutaBase = getMinecraftPath();
-    const lvlJson = pathSrv.join(rutaBase,'mundoActivo.json');
-    let mundoActivo='bedrock_server';
-    try { mundoActivo = JSON.parse(fsSrv.readFileSync(lvlJson,'utf8'))['level-name']; } catch{}
-    const script = pathSrv.join(admin_base_path,'scripts','backup_manual.sh');
-    exec(`bash ${script} "${rutaBase}" "${mundoActivo}"`, err=>{ if(err) console.error(err); });
-    res.json({ message:'Backup iniciado' });
-  } catch(e){ next(e); }
+    const basePath = getMinecraftPath();
+    const lvlJsonPath = pathSrv.join(basePath, "mundoActivo.json");
+
+    let activeWorld = "bedrock_server";
+    try {
+      const data = JSON.parse(fsSrv.readFileSync(lvlJsonPath, "utf8"));
+      activeWorld = data["level-name"] || activeWorld;
+    } catch {
+      // fallback to default if file missing or invalid
+    }
+
+    const scriptPath = pathSrv.join(
+      admin_base_path,
+      "scripts",
+      "backup_manual.sh"
+    );
+    const cmd = `bash ${scriptPath} "${basePath}" "${activeWorld}"`;
+
+    exec(cmd, (err) => {
+      if (err) {
+        console.error("Error executing backup script:", err);
+      }
+    });
+
+    res.json({ message: "Backup started" });
+  } catch (err) {
+    next(err);
+  }
 };
+
 
 // POST /api/server/backup-toggle
 exports.backupToggle = (req, res, next) => {
   try {
-    const habilitar = req.body.habilitar==='true';
+    const enable = req.body.habilitar === "true";
     const cronLine = getCronLine();
-    exec('crontab -l',(err,stdout)=>{
-      let lines = err?[]:stdout.split('\n').filter(l=>l.trim());
-      if(habilitar && !lines.includes(cronLine)) lines.push(cronLine);
-      if(!habilitar) lines = lines.filter(l=>l!==cronLine);
-      const child = exec('crontab -'); child.stdin.write(lines.join('\n')+'\n'); child.stdin.end();
-      res.json({ cronActivo:habilitar });
+
+    exec("crontab -l", (err, stdout) => {
+      let lines = [];
+
+      if (!err) {
+        lines = stdout
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0);
+      }
+
+      if (enable && !lines.includes(cronLine)) {
+        lines.push(cronLine);
+      }
+
+      if (!enable) {
+        lines = lines.filter((line) => line !== cronLine);
+      }
+
+      const child = exec("crontab -");
+      child.stdin.write(lines.join("\n") + "\n");
+      child.stdin.end();
+
+      res.json({ cronActive: enable });
     });
-  } catch(e){ next(e); }
+  } catch (err) {
+    next(err);
+  }
 };
+
 
 // POST /api/server/restore-backup
 exports.restoreBackup = (req, res, next) => {
   try {
     const { filename } = req.body;
-    const rutaBase = getMinecraftPath();
-    const backupPath = pathSrv.join(rutaBase,'backups','mundos',filename);
-    const script = pathSrv.join(admin_base_path,'scripts','restaurar_backup.sh');
-    execFile(script,[backupPath,rutaBase],err=>{ if(err) console.error(err); });
-    res.json({ message:`Restaurando backup: ${filename}` });
-  } catch(e){ next(e); }
+    const basePath = getMinecraftPath();
+    const backupPath = pathSrv.join(basePath, "backups", "mundos", filename);
+    const scriptPath = pathSrv.join(
+      admin_base_path,
+      "scripts",
+      "restaurar_backup.sh"
+    );
+
+    execFile(scriptPath, [backupPath, basePath], (err) => {
+      if (err) {
+        console.error("Error restoring backup:", err);
+      }
+    });
+
+    res.json({ message: `Restoring backup: ${filename}` });
+  } catch (err) {
+    next(err);
+  }
 };
 
-// POST /api/server/save-messages
+
+// POST /api/server/save-messages. Pending
 exports.saveMessages = (req, res, next) => {
   try {
     const { bienvenida, noticias, despedida } = req.body;
@@ -154,51 +290,62 @@ exports.saveMessages = (req, res, next) => {
 // POST /api/server/start
 exports.start = (req, res, next) => {
   try {
-    const cmd = `screen -dmS minecraft_server bash -c "cd ${getMinecraftPath()} && LD_LIBRARY_PATH=. ./bedrock_server"`;
-    exec(cmd, err=> err? next(err): res.json({ message:'Servidor iniciado' }));
-  } catch(e){ next(e); }
+    const serverPath = getMinecraftPath();
+    const cmd = `screen -dmS minecraft_server bash -c "cd ${serverPath} && LD_LIBRARY_PATH=. ./bedrock_server"`;
+
+    exec(cmd, (err) => {
+      if (err) {
+        return next(err);
+      }
+      res.json({ message: "Server started" });
+    });
+  } catch (err) {
+    next(err);
+  }
 };
 
 // POST /api/server/stop
 exports.stop = (req, res, next) => {
   try {
-    // Enviar cuenta regresiva de mensajes antes de detener el servidor
-    const mensajes = [
-      '⚠ Apagando servidor en 10 segundos...',
-      '⚠ Apagando en 9 segundos...',
-      '⚠ Apagando en 8 segundos...',
-      '⚠ Apagando en 7 segundos...',
-      '⚠ Apagando en 6 segundos...',
-      '⚠ Apagando en 5 segundos...',
-      '⚠ Apagando en 4 segundos...',
-      '⚠ Apagando en 3 segundos...',
-      '⚠ Apagando en 2 segundos...',
-      '⚠ Apagando en 1 segundo...',
-      '⛔ Apagando ahora...'
-    ];
-    mensajes.forEach((msg, index) => {
-      setTimeout(() => {
-        const cmd = `screen -S minecraft_server -p 0 -X stuff "say ${msg}$(printf '
-')"`;
-        exec(cmd, err => {
-          if (err) console.error(`Error al enviar mensaje de apagado: ${msg}`, err);
-        });
-      }, index * 1000);
-    });
-    // Después de los mensajes, enviar comando stop
-    setTimeout(() => {
-      const stopCmd = `screen -S minecraft_server -p 0 -X stuff "stop$(printf '
-')"`;
-      exec(stopCmd, err => {
-        if (err) console.error('Error al detener el servidor:', err);
-      });
-    }, mensajes.length * 1000);
+    let seconds = 10;
 
-    res.json({ message: 'Servidor apagándose con cuenta regresiva' });
-  } catch (e) {
-    next(e);
+    const interval = setInterval(() => {
+      const message =
+        seconds === 0
+          ? "⛔ Shutting down now..."
+          : seconds === 1
+          ? `⚠ Shutting down in ${seconds} second...`
+          : `⚠ Shutting down in ${seconds} seconds...`;
+
+      const cmd = `screen -S minecraft_server -p 0 -X stuff "say ${message}$(printf '')"`;
+
+      exec(cmd, (err) => {
+        if (err) {
+          console.error(`Error sending shutdown message: ${message}`, err);
+        }
+      });
+
+      if (seconds-- === 0) {
+        clearInterval(interval);
+      }
+    }, 1000);
+
+    // After countdown, send stop command
+    setTimeout(() => {
+      const stopCmd = `screen -S minecraft_server -p 0 -X stuff "stop$(printf '')"`;
+      exec(stopCmd, (err) => {
+        if (err) {
+          console.error("Error stopping the server:", err);
+        }
+      });
+    }, (seconds + 1) * 1000);
+
+    res.json({ message: "Server shutting down with countdown" });
+  } catch (err) {
+    next(err);
   }
 };
+
 
 module.exports = exports;
 
