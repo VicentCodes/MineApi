@@ -1,4 +1,5 @@
 #!/bin/bash
+# backup_manual.sh
 
 # Verifica que recibió los argumentos
 if [ $# -lt 2 ]; then
@@ -24,12 +25,12 @@ else
 fi
 
 # Destinos
-DESTINO_MUNDOS="$RUTA_BASE/backups/mundos"
-DESTINO_CONFIG="$RUTA_BASE/backups/config"
+DESTINO_MUNDOS="$RUTA_BASE/backups/worlds/$MUNDO_ACTIVO"
+DESTINO_SERVER="$RUTA_BASE/backups/server"
 
 # Crear carpetas de backup si no existen
 mkdir -p "$DESTINO_MUNDOS"  || { echo "❌ No se pudo crear $DESTINO_MUNDOS"; exit 1; }
-mkdir -p "$DESTINO_CONFIG" || { echo "❌ No se pudo crear $DESTINO_CONFIG"; exit 1; }
+mkdir -p "$DESTINO_SERVER"  || { echo "❌ No se pudo crear $DESTINO_SERVER"; exit 1; }
 
 # Mensaje al servidor (no aborta si falla la notificación)
 screen -S minecraft_server -p 0 -X stuff "say Iniciando backup...$(printf \\r)" 2>/dev/null || true
@@ -47,14 +48,15 @@ else
   exit 1
 fi
 
-# 2) Backup de configuración
-NOMBRE_BACKUP_CONFIG="backup_config_${FECHA}.zip"
-zip -r "$DESTINO_CONFIG/$NOMBRE_BACKUP_CONFIG" "$ORIGEN_CONFIG" \
-  && echo "✅ Config comprimida en $DESTINO_CONFIG/$NOMBRE_BACKUP_CONFIG" \
-  || { echo "❌ Error al comprimir configuración"; exit 1; }
+# 2) Backup del servidor (config, plugins, etc.)
+NOMBRE_BACKUP_SERVER="backup_server_${FECHA}.zip"
+zip -r "$DESTINO_SERVER/$NOMBRE_BACKUP_SERVER" "$ORIGEN_CONFIG" \
+  && echo "✅ Servidor comprimido en $DESTINO_SERVER/$NOMBRE_BACKUP_SERVER" \
+  || { echo "❌ Error al comprimir servidor"; exit 1; }
 
 # Mensaje de fin (ignora errores de screen)
-screen -S minecraft_server -p 0 -X stuff "say Backup completo: $NOMBRE_BACKUP_MUNDOS y $NOMBRE_BACKUP_CONFIG$(printf \\r)" \
+screen -S minecraft_server -p 0 -X stuff \
+  "say Backup completo: $NOMBRE_BACKUP_MUNDOS y $NOMBRE_BACKUP_SERVER$(printf \\r)" \
   2>/dev/null || true
 
 exit 0
