@@ -26,8 +26,6 @@ const execFile = util.promisify(cp.execFile);
 
 // Helper: resolve script path under config/scripts directory
 function scriptPath(scriptName) {
-  // admin_base_path = .../src/config
-  // scripts are in .../src/config/scripts
   return path.join(admin_base_path, "scripts", scriptName);
 }
 
@@ -46,16 +44,15 @@ exports.getPath = async (req, res) => {
 exports.setPath = async (req, res) => {
   try {
     const { newPath } = req.body;
-    if (!newPath) {
-      return res.status(400).json({ error: "newPath is required" });
-    }
+    if (!newPath) return res.status(400).json({ error: "newPath is required" });
     const resolved = path.resolve(newPath);
-    if (!fs.existsSync(resolved)) {
+    if (!fs.existsSync(resolved))
       return res.status(400).json({ error: "Path does not exist" });
-    }
     setMinecraftPath(resolved);
-    const updated = getMinecraftPath();
-    return res.json({ message: "Path updated successfully", path: updated });
+    return res.json({
+      message: "Path updated successfully",
+      path: getMinecraftPath(),
+    });
   } catch (error) {
     console.error("setPath error:", error);
     return res.status(500).json({ error: "Failed to set Minecraft path" });
@@ -68,7 +65,6 @@ exports.getInfo = async (req, res) => {
     const cfg = _readConfig();
     const mensajes = cfg.mensajes || {};
     const mundoActivo = cfg.estado?.mundo_activo || "";
-
     let backups = [];
     try {
       const backupsDir = path.join(getMinecraftPath(), "backups", "mundos");
@@ -79,7 +75,6 @@ exports.getInfo = async (req, res) => {
     } catch (err) {
       console.error("getInfo backups error:", err);
     }
-
     const serverEncendido = isServerRunning();
     let cronActivo = false;
     try {
@@ -88,7 +83,6 @@ exports.getInfo = async (req, res) => {
     } catch {
       cronActivo = false;
     }
-
     return res.json({
       mensajes,
       mundoActivo,
@@ -108,7 +102,6 @@ exports.status = async (req, res) => {
     const serverRunning = isServerRunning();
     let uptime = null;
     let lastStopped = null;
-
     if (serverRunning) {
       uptime = getServerStartTime();
       clearLastStoppedTime();
@@ -116,7 +109,6 @@ exports.status = async (req, res) => {
       if (!getLastStoppedTime()) setLastStoppedTime();
       lastStopped = getLastStoppedTime();
     }
-
     return res.json({
       serverRunning,
       ...(uptime && { uptime }),
@@ -134,8 +126,7 @@ exports.sendMessage = async (req, res) => {
     const message = req.body.mensaje?.trim();
     if (!message) return res.status(400).json({ error: "Empty message" });
     const escaped = message.replace(/'/g, "\\'");
-    const cmd = `screen -S minecraft_server -p 0 -X stuff 'say ${escaped}\\r'`;
-    await exec(cmd);
+    await exec(`screen -S minecraft_server -p 0 -X stuff 'say ${escaped}\\r'`);
     return res.json({ message: "Message sent" });
   } catch (error) {
     console.error("sendMessage error:", error);
@@ -147,14 +138,11 @@ exports.sendMessage = async (req, res) => {
 exports.shutdown = async (req, res) => {
   try {
     const minutes = parseInt(req.body.tiempo, 10);
-    if (![0, 2, 5, 10].includes(minutes)) {
+    if (![0, 2, 5, 10].includes(minutes))
       return res.status(400).json({ error: "Invalid shutdown time" });
-    }
     const script = scriptPath("apagar_con_avisos.sh");
-    if (!fs.existsSync(script)) {
-      console.error("shutdown script not found:", script);
+    if (!fs.existsSync(script))
       return res.status(500).json({ error: "Shutdown script not found" });
-    }
     await exec(`bash "${script}" ${minutes}`);
     return res.json({
       message: `Server will shut down in ${minutes} minute(s)`,
@@ -180,17 +168,26 @@ exports.restart = async (req, res) => {
 exports.backup = async (req, res) => {
   try {
     const base = getMinecraftPath();
+    // Leer mundo activo desde YAML
+    const cfg = _readConfig();
+    const activeWorld = cfg.estado?.mundo_activo || "bedrock_server";
     const script = scriptPath("backup_manual.sh");
     if (!fs.existsSync(script)) {
       console.error("backup script not found:", script);
       return res.status(500).json({ error: "Backup script not found" });
     }
-    await exec(`bash "${script}" "${base}"`);
-    return res.json({ message: "Backup started" });
+    // Ejecutar backup con bash y dos argumentos
+    const { stdout, stderr } = await exec(
+      `bash "${script}" "${base}" "${activeWorld}"`
+    );
+    console.log("Backup stdout:", stdout);
+    if (stderr) console.error("Backup stderr:", stderr);
+    return res.json({ message: "Backup started", world: activeWorld });
   } catch (error) {
     console.error("backup error:", error);
-    const detail = error.stderr || error.message;
-    return res.status(500).json({ error: `Failed to start backup: ${detail}` });
+    return res
+      .status(500)
+      .json({ error: `Failed to start backup: ${error.message}` });
   }
 };
 
@@ -199,22 +196,17 @@ exports.backupToggle = async (req, res) => {
   try {
     const enable = req.body.habilitar === "true";
     const cronLine = getCronLine();
-
     let existing = "";
     try {
       ({ stdout: existing } = await exec("crontab -l"));
-    } catch {
-      existing = "";
-    }
+    } catch {}
     const lines = existing
       .split("\n")
       .map((l) => l.trim())
       .filter((l) => l);
-
     let updated = lines;
     if (enable && !updated.includes(cronLine)) updated.push(cronLine);
     if (!enable) updated = updated.filter((l) => l !== cronLine);
-
     await new Promise((resolve, reject) => {
       const child = cp.spawn("crontab", ["-"]);
       child.stdin.write(updated.join("\n") + "\n");
@@ -224,7 +216,6 @@ exports.backupToggle = async (req, res) => {
         code === 0 ? resolve() : reject(new Error(`crontab exited ${code}`))
       );
     });
-
     return res.json({ cronActive: enable });
   } catch (error) {
     console.error("backupToggle error:", error);
@@ -238,19 +229,13 @@ exports.restoreBackup = async (req, res) => {
     const { filename } = req.body;
     if (!filename)
       return res.status(400).json({ error: "filename is required" });
-
     const base = getMinecraftPath();
     const backupPath = path.join(base, "backups", "mundos", filename);
-    if (!fs.existsSync(backupPath)) {
+    if (!fs.existsSync(backupPath))
       return res.status(404).json({ error: "Backup file not found" });
-    }
-
     const script = scriptPath("restaurar_backup.sh");
-    if (!fs.existsSync(script)) {
-      console.error("restore script not found:", script);
+    if (!fs.existsSync(script))
       return res.status(500).json({ error: "Restore script not found" });
-    }
-
     await execFile(script, [backupPath, base]);
     return res.json({ message: `Backup restored: ${filename}` });
   } catch (error) {
@@ -266,9 +251,8 @@ exports.restoreBackup = async (req, res) => {
 exports.saveMessages = async (req, res) => {
   try {
     const { bienvenida, noticias, despedida } = req.body;
-    if ([bienvenida, noticias, despedida].some((v) => typeof v !== "string")) {
+    if ([bienvenida, noticias, despedida].some((v) => typeof v !== "string"))
       return res.status(400).json({ error: "Invalid message payload" });
-    }
     const cfg = _readConfig();
     cfg.mensajes = { bienvenida, noticias, despedida };
     _writeConfig(cfg);
@@ -283,8 +267,9 @@ exports.saveMessages = async (req, res) => {
 exports.start = async (req, res) => {
   try {
     const base = getMinecraftPath();
-    const cmd = `screen -dmS minecraft_server bash -c "cd ${base} && LD_LIBRARY_PATH=. ./bedrock_server"`;
-    await exec(cmd);
+    await exec(
+      `screen -dmS minecraft_server bash -c "cd ${base} && LD_LIBRARY_PATH=. ./bedrock_server"`
+    );
     return res.json({ message: "Server started" });
   } catch (error) {
     console.error("start error:", error);
@@ -305,17 +290,17 @@ exports.stop = async (req, res) => {
             ? `⚠ Shutting down in ${seconds} second...`
             : `⚠ Shutting down in ${seconds} seconds...`;
         cp.exec(
-          `screen -S minecraft_server -p 0 -X stuff \"say ${msg}$(printf '')\"`,
+          `screen -S minecraft_server -p 0 -X stuff "say ${msg}$(printf '')"`,
           (err) => {
             if (err) console.error("shutdown message error:", err);
           }
         );
         if (seconds-- === 0) {
           clearInterval(interval);
-          const stopCmd = `screen -S minecraft_server -p 0 -X stuff \"stop$(printf '')\"`;
-          cp.exec(stopCmd, (err) => {
-            err ? reject(err) : resolve();
-          });
+          cp.exec(
+            `screen -S minecraft_server -p 0 -X stuff "stop$(printf '')"`,
+            (err) => (err ? reject(err) : resolve())
+          );
         }
       }, 1000);
     });
