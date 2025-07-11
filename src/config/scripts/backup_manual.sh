@@ -37,10 +37,11 @@ screen -S minecraft_server -p 0 -X stuff "say Iniciando backup...$(printf \\r)" 
 screen -S minecraft_server -p 0 -X stuff "save-all$(printf \\r)"              2>/dev/null || true
 sleep 2
 
-# 1) Backup del mundo activo
+# 1) Backup del mundo activo (solo la carpeta del mundo)
 NOMBRE_BACKUP_MUNDOS="backup_mundos_${MUNDO_ACTIVO}_${FECHA}.zip"
 if [ -d "$ORIGEN_MUNDOS" ]; then
-  (cd "$RUTA_BASE" && zip -r "$DESTINO_MUNDOS/$NOMBRE_BACKUP_MUNDOS" "worlds/$MUNDO_ACTIVO") \
+  # Nos movemos dentro de worlds para que el zip solo contenga <MUNDO_ACTIVO>/
+  (cd "$RUTA_BASE/worlds" && zip -r "$DESTINO_MUNDOS/$NOMBRE_BACKUP_MUNDOS" "$MUNDO_ACTIVO") \
     && echo "✅ Mundo comprimido en $DESTINO_MUNDOS/$NOMBRE_BACKUP_MUNDOS" \
     || { echo "❌ Error al comprimir mundo"; exit 1; }
 else
