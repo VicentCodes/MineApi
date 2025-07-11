@@ -1,0 +1,9 @@
+services:
+  mineapi:
+    build: .
+    container_name: mineapi
+    ports:
+      - "19130:19130"
+    volumes:
+      - ../bedrock-server:/srv/minecraft
+    restart: unless-stopped
