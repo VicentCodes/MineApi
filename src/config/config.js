@@ -87,6 +87,40 @@ function setApiPath(newPath) {
   }
 }
 
+// (al final del archivo config/config.js)
+
+function _readServerProperties(basePath) {
+  const propsFile = path.join(basePath, 'server.properties');
+  if (!fs.existsSync(propsFile)) return null;
+  const text = fs.readFileSync(propsFile, 'utf8');
+  for (let line of text.split(/\r?\n/)) {
+    // ignora comentarios y líneas vacías
+    if (!line || line.startsWith('#')) continue;
+    const [key, ...rest] = line.split('=');
+    if (key.trim() === 'level-name') {
+      return rest.join('=').trim();
+    }
+  }
+  return null;
+}
+
+/**
+ * Sincroniza estado.mundo_activo en server.yml leyendo server.properties
+ */
+function syncMundoActivo() {
+  const cfg = _readConfig();
+  const base = cfg.paths.minecraft_server;
+  const level = _readServerProperties(base);
+  if (level && cfg.estado.mundo_activo !== level) {
+    cfg.estado = cfg.estado || {};
+    cfg.estado.mundo_activo = level;
+    _writeConfig(cfg);
+    console.log(`🔄 mundo_activo sincronizado a "${level}"`);
+  }
+}
+
+
+
 module.exports = {
   getMinecraftPath,
   setMinecraftPath,
@@ -95,4 +129,6 @@ module.exports = {
   _readConfig,
   _writeConfig,
   admin_base_path,
+  _readServerProperties,
+  syncMundoActivo,
 };
