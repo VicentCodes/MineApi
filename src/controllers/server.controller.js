@@ -231,7 +231,8 @@ exports.backup = async (req, res) => {
 // POST /api/server/backup-toggle
 exports.backupToggle = async (req, res) => {
   try {
-    const enable    = req.body.habilitar === "true";
+    // Ahora esperamos un booleano en enabled
+    const enable = Boolean(req.body.enabled);
     // Horas de intervalo, por defecto 4h
     let intervalHrs = parseInt(req.body.interval, 10);
     if (isNaN(intervalHrs) || intervalHrs < 1) intervalHrs = 4;
@@ -241,26 +242,23 @@ exports.backupToggle = async (req, res) => {
     const activeWorld = cfg.estado?.mundo_activo || "";
     const script      = scriptPath("backup_manual.sh");
 
-    // Línea cron que ejecuta el backup
-    // A la hora 0 de cada `intervalHrs` horas
-    const cronCmd = `bash "${script}" "${base}" "${activeWorld}"`;
+    // Construye la línea de cron
+    const cronCmd  = `bash "${script}" "${base}" "${activeWorld}"`;
     const cronLine = `0 */${intervalHrs} * * * ${cronCmd}`;
 
-    // Leer crontab actual
+    // Lee el crontab actual y filtra cualquier línea previa de este script
     let existing = "";
     try { ({ stdout: existing } = await exec("crontab -l")); } catch {}
-
-    // Filtrar líneas vacías y existentes que no sean de nuestro backup_manual.sh
     const lines = existing
       .split("\n")
       .filter(l => l.trim() && !l.includes(script));
 
-    // Si habilitamos, añadimos la nueva línea; si no, la dejamos fuera
+    // Agrega o quita la nueva línea según enable
     if (enable) {
       lines.push(cronLine);
     }
 
-    // Escribimos el nuevo crontab
+    // Escribe el nuevo crontab
     await new Promise((resolve, reject) => {
       const child = cp.spawn("crontab", ["-"]);
       child.stdin.write(lines.join("\n") + "\n");
@@ -282,6 +280,7 @@ exports.backupToggle = async (req, res) => {
     return res.status(500).json({ error: "Failed to toggle backup cron" });
   }
 };
+
 
 
 // POST /api/server/restore-backup
