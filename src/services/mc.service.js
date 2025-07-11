@@ -5,7 +5,7 @@ const path = require("path");
 const { execFile, execSync } = require("child_process");
 const { getMinecraftPath } = require("../config/config");
 
-// Restart the server with warnings
+// Restart server with warnings
 async function restartServer() {
   return new Promise((resolve, reject) => {
     const script = path.join(
@@ -16,7 +16,6 @@ async function restartServer() {
     );
     execFile(script, (err) => {
       if (err) return reject(err);
-      // wait 10s then start fresh
       setTimeout(() => {
         const cmd = `screen -dmS minecraft_server bash -c "cd ${getMinecraftPath()} && LD_LIBRARY_PATH=. ./bedrock_server"`;
         execFile(cmd, (err2) => (err2 ? reject(err2) : resolve()));
@@ -66,7 +65,6 @@ function getServerStartTime() {
   }
 }
 
-// Path to store last stopped timestamp
 function getLastStoppedFilePath() {
   return path.join(__dirname, "..", "config", ".bedrock_server_last_stopped");
 }
@@ -86,9 +84,9 @@ function clearLastStoppedTime() {
   if (fs.existsSync(file)) fs.unlinkSync(file);
 }
 
-// Default cron entry for backups every 4h
-function getCronEntry() {
-  const script = path.join(__dirname, "..", "scripts", "manual_backup.sh");
+// Returns the default cron line for 4-hour backups
+function getCronLine() {
+  const script = path.join(__dirname, "..", "scripts", "backup_manual.sh");
   return `0 */4 * * * bash ${script} "${getMinecraftPath()}"`;
 }
 
@@ -99,5 +97,5 @@ module.exports = {
   getLastStoppedTime,
   setLastStoppedTime,
   clearLastStoppedTime,
-  getCronEntry,
+  getCronLine,
 };

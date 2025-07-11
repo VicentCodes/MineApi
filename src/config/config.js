@@ -4,17 +4,17 @@ const fs = require("fs");
 const path = require("path");
 const yaml = require("js-yaml");
 
-const CONFIG_DIR = __dirname;
+const CONFIG_DIR = path.join(__dirname);
 const CONFIG_PATH = path.join(CONFIG_DIR, "server.yml");
-const ADMIN_BASE_PATH = __dirname;
+const admin_base_path = __dirname;
 
-// Ensure the config file and directory exist
+// Ensure config file exists
 function _ensureConfig() {
   if (!fs.existsSync(CONFIG_PATH)) {
     const defaultConfig = {
       paths: {
-        api_path: ADMIN_BASE_PATH,
-        minecraft_path: "/home/minecraft/bedrock-server",
+        api_server: admin_base_path,
+        minecraft_server: "/home/minecraft/bedrock-server",
       },
       messages: {
         welcome: "",
@@ -22,7 +22,7 @@ function _ensureConfig() {
         farewell: "",
       },
       state: {
-        active_world: "",
+        activeWorld: "",
       },
     };
     fs.writeFileSync(
@@ -33,7 +33,7 @@ function _ensureConfig() {
   }
 }
 
-// Read and parse the YAML config
+// Read and parse YAML
 function _readConfig() {
   try {
     _ensureConfig();
@@ -44,7 +44,7 @@ function _readConfig() {
   }
 }
 
-// Serialize and write the config back to YAML
+// Serialize and write YAML
 function _writeConfig(cfg) {
   fs.writeFileSync(
     CONFIG_PATH,
@@ -53,77 +53,70 @@ function _writeConfig(cfg) {
   );
 }
 
-// Initialize api_path if missing
+// Ensure api_server path in config
 (function ensureApiPath() {
   const cfg = _readConfig();
   if (!cfg.paths) cfg.paths = {};
-  if (!cfg.paths.api_path) {
-    cfg.paths.api_path = ADMIN_BASE_PATH;
+  if (!cfg.paths.api_server) {
+    cfg.paths.api_server = admin_base_path;
     _writeConfig(cfg);
   }
 })();
 
-// Getters and setters for Minecraft path
 function getMinecraftPath() {
   const cfg = _readConfig();
-  return cfg.paths.minecraft_path || cfg.paths.minecraft_server || "";
+  return cfg.paths.minecraft_server;
 }
-
 function setMinecraftPath(newPath) {
   const cfg = _readConfig();
-  cfg.paths.minecraft_path = path.resolve(newPath);
+  cfg.paths.minecraft_server = path.resolve(newPath);
   _writeConfig(cfg);
-  if (!fs.existsSync(cfg.paths.minecraft_path)) {
-    fs.mkdirSync(cfg.paths.minecraft_path, { recursive: true });
+  if (!fs.existsSync(cfg.paths.minecraft_server)) {
+    fs.mkdirSync(cfg.paths.minecraft_server, { recursive: true });
   }
 }
-
-// Getters and setters for API path
 function getApiPath() {
   const cfg = _readConfig();
-  return cfg.paths.api_path;
+  return cfg.paths.api_server;
 }
 function setApiPath(newPath) {
   const cfg = _readConfig();
-  cfg.paths.api_path = path.resolve(newPath);
+  cfg.paths.api_server = path.resolve(newPath);
   _writeConfig(cfg);
-  if (!fs.existsSync(cfg.paths.api_path)) {
-    fs.mkdirSync(cfg.paths.api_path, { recursive: true });
+  if (!fs.existsSync(cfg.paths.api_server)) {
+    fs.mkdirSync(cfg.paths.api_server, { recursive: true });
   }
 }
 
-// Read server.properties for level-name
 function _readServerProperties(basePath) {
   const propsFile = path.join(basePath, "server.properties");
   if (!fs.existsSync(propsFile)) return null;
   const text = fs.readFileSync(propsFile, "utf8");
   for (let line of text.split(/\r?\n/)) {
-    // skip comments and empty lines
     if (!line || line.startsWith("#")) continue;
     const [key, ...rest] = line.split("=");
     if (key.trim() === "level-name") {
-      const level = rest.join("=").trim();
-      console.log(`🔍 Found level-name: ${level}`);
-      return level;
+      console.log(`🔍 level-name found: ${rest.join("=")}`);
+      return rest.join("=").trim();
     }
   }
   return null;
 }
 
 /**
- * Synchronize state.active_world in server.yml by reading server.properties.
- * @returns {string|null} the level-name, or null if not found
+ * Synchronize state.activeWorld in server.yml based on server.properties
+ * @returns {string|null} the level-name found or null if none
  */
 function syncActiveWorld() {
   const cfg = _readConfig();
-  const base = cfg.paths.minecraft_path;
+  const base = cfg.paths.minecraft_server;
   const level = _readServerProperties(base);
   if (level) {
     cfg.state = cfg.state || {};
-    if (cfg.state.active_world !== level) {
-      cfg.state.active_world = level;
+    if (cfg.state.activeWorld !== level) {
+      cfg.state.activeWorld = level;
       _writeConfig(cfg);
-      console.log(`🔄 active_world synchronized to "${level}"`);
+      console.log(`🔄 activeWorld synchronized to "${level}"`);
     }
   } else {
     console.warn(`⚠️ No server.properties found in ${base}`);
@@ -138,7 +131,7 @@ module.exports = {
   setApiPath,
   _readConfig,
   _writeConfig,
-  ADMIN_BASE_PATH,
+  admin_base_path,
   _readServerProperties,
   syncActiveWorld,
 };

@@ -10,7 +10,7 @@ const {
   setMinecraftPath,
   _readConfig,
   _writeConfig,
-  ADMIN_BASE_PATH,
+  admin_base_path,
 } = require("../config/config");
 
 const {
@@ -20,14 +20,14 @@ const {
   setLastStoppedTime,
   clearLastStoppedTime,
   restartServer,
-  getCronEntry,
+  getCronLine,
 } = require("../services/mc.service");
 
 const exec = util.promisify(cp.exec);
 const execFile = util.promisify(cp.execFile);
 
 function scriptPath(scriptName) {
-  return path.join(ADMIN_BASE_PATH, "scripts", scriptName);
+  return path.join(admin_base_path, "scripts", scriptName);
 }
 
 // GET /api/server
@@ -35,22 +35,22 @@ exports.getInfo = async (req, res) => {
   try {
     const cfg = _readConfig();
     const messages = cfg.messages || {};
-    const activeWorld = cfg.state?.active_world || "";
+    const activeWorld = cfg.state?.activeWorld || "";
     const basePath = getMinecraftPath();
 
-    // World backups organized by world name
+    // World backups organized by world
     let worldBackups = {};
     try {
-      const worldsDir = path.join(basePath, "backups", "worlds");
-      const worldDirs = fs.existsSync(worldsDir)
+      const worldsBase = path.join(basePath, "backups", "worlds");
+      const worldDirs = fs.existsSync(worldsBase)
         ? fs
-            .readdirSync(worldsDir, { withFileTypes: true })
+            .readdirSync(worldsBase, { withFileTypes: true })
             .filter((d) => d.isDirectory())
             .map((d) => d.name)
         : [];
 
       worldDirs.forEach((world) => {
-        const dir = path.join(worldsDir, world);
+        const dir = path.join(worldsBase, world);
         const files = fs
           .readdirSync(dir)
           .filter((f) => f.endsWith(".zip"))
@@ -75,25 +75,27 @@ exports.getInfo = async (req, res) => {
       console.error("getInfo serverBackups error:", err);
     }
 
-    // Server running state
-    const serverOn = isServerRunning();
+    // Server running status
+    const serverRunning = isServerRunning();
 
-    // Check for backup cron job
+    // Detect backup cron job
     let cronActive = false;
     let intervalHours = null;
     try {
-      const backupScript = scriptPath("manual_backup.sh");
+      const script = scriptPath("backup_manual.sh");
       const { stdout } = await exec("crontab -l");
       const lines = stdout
         .split("\n")
         .map((l) => l.trim())
-        .filter((l) => l && l.includes(backupScript));
+        .filter((l) => l && l.includes(script));
 
       if (lines.length > 0) {
         cronActive = true;
         // extract interval: look for "0 */<n> "
         const m = lines[0].match(/^0 \*\/(\d+) /);
-        if (m) intervalHours = parseInt(m[1], 10);
+        if (m) {
+          intervalHours = parseInt(m[1], 10);
+        }
       }
     } catch {
       cronActive = false;
@@ -104,7 +106,7 @@ exports.getInfo = async (req, res) => {
       activeWorld,
       worldBackups,
       serverBackups,
-      serverOn,
+      serverRunning,
       cronActive,
       intervalHours,
     });
@@ -117,11 +119,11 @@ exports.getInfo = async (req, res) => {
 // GET /api/server/status
 exports.status = async (req, res) => {
   try {
-    const serverOn = isServerRunning();
+    const serverRunning = isServerRunning();
     let uptime = null;
     let lastStopped = null;
 
-    if (serverOn) {
+    if (serverRunning) {
       uptime = getServerStartTime();
       clearLastStoppedTime();
     } else {
@@ -130,7 +132,7 @@ exports.status = async (req, res) => {
     }
 
     return res.json({
-      serverOn,
+      serverRunning,
       ...(uptime && { uptime }),
       ...(lastStopped && { lastStopped }),
     });
@@ -221,8 +223,8 @@ exports.backup = async (req, res) => {
   try {
     const basePath = getMinecraftPath();
     const cfg = _readConfig();
-    const world = cfg.state?.active_world || "bedrock_server";
-    const script = scriptPath("manual_backup.sh");
+    const activeWorld = cfg.state?.activeWorld || "bedrock_server";
+    const script = scriptPath("backup_manual.sh");
 
     if (!fs.existsSync(script)) {
       console.error("backup script not found:", script);
@@ -230,12 +232,12 @@ exports.backup = async (req, res) => {
     }
 
     const { stdout, stderr } = await exec(
-      `bash "${script}" "${basePath}" "${world}"`
+      `bash "${script}" "${basePath}" "${activeWorld}"`
     );
     console.log("Backup stdout:", stdout);
     if (stderr) console.error("Backup stderr:", stderr);
 
-    return res.json({ message: "Backup started", world });
+    return res.json({ message: "Backup started", world: activeWorld });
   } catch (error) {
     console.error("backup error:", error);
     return res
@@ -253,10 +255,9 @@ exports.backupToggle = async (req, res) => {
 
     const basePath = getMinecraftPath();
     const cfg = _readConfig();
-    const world = cfg.state?.active_world || "";
-    const script = scriptPath("manual_backup.sh");
-
-    const cronCmd = `bash "${script}" "${basePath}" "${world}"`;
+    const activeWorld = cfg.state?.activeWorld || "";
+    const script = scriptPath("backup_manual.sh");
+    const cronCmd = `bash "${script}" "${basePath}" "${activeWorld}"`;
     const cronLine = `0 */${intervalHrs} * * * ${cronCmd}`;
 
     let existing = "";
@@ -298,12 +299,12 @@ exports.restoreBackup = async (req, res) => {
 
     const basePath = getMinecraftPath();
     const cfg = _readConfig();
-    const world = cfg.state?.active_world || "";
+    const activeWorld = cfg.state?.activeWorld || "";
     const backupPath = path.join(
       basePath,
       "backups",
       "worlds",
-      world,
+      activeWorld,
       filename
     );
     if (!fs.existsSync(backupPath))
@@ -364,9 +365,9 @@ exports.stop = async (req, res) => {
         const msg =
           seconds === 0
             ? "⛔ Shutting down now..."
-            : `⚠ Shutting down in ${seconds} second${
-                seconds === 1 ? "" : "s"
-              }...`;
+            : seconds === 1
+            ? `⚠ Shutting down in ${seconds} second...`
+            : `⚠ Shutting down in ${seconds} seconds...`;
         cp.exec(
           `screen -S minecraft_server -p 0 -X stuff "say ${msg}$(printf '')"`,
           (err) => {
@@ -389,17 +390,3 @@ exports.stop = async (req, res) => {
   }
 };
 
-const { syncActiveWorld } = require("../config/config");
-const http = require("http");
-const app = require("../app");
-
-const PORT = process.env.PORT || 19130;
-
-// Sync active world once, then start listening
-const world = syncActiveWorld();
-
-http.createServer(app).listen(PORT, () => {
-  console.log(
-    `API listening on port ${PORT}, active world synchronized: ${world}`
-  );
-});
