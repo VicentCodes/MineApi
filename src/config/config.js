@@ -66,8 +66,9 @@ function _writeConfig(cfg) {
 // Getters and setters for Minecraft path
 function getMinecraftPath() {
   const cfg = _readConfig();
-  return cfg.paths.minecraft_path;
+  return cfg.paths.minecraft_path || cfg.paths.minecraft_server || "";
 }
+
 function setMinecraftPath(newPath) {
   const cfg = _readConfig();
   cfg.paths.minecraft_path = path.resolve(newPath);
