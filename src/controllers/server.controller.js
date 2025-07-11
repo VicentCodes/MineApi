@@ -33,53 +33,67 @@ function scriptPath(scriptName) {
 // GET /api/server
 exports.getInfo = async (req, res) => {
   try {
-    const cfg = _readConfig();
-    const mensajes = cfg.mensajes || {};
-    const mundoActivo = cfg.estado?.mundo_activo || "";
-    const base = getMinecraftPath();
+    const cfg         = _readConfig();
+    const mensajes    = cfg.mensajes || {};
+    const mundoActivo = cfg.estado?.mundo_activo || '';
+    const base        = getMinecraftPath();
 
     // Backups de mundo organizados por mundo
     let worldBackups = {};
     try {
-      const worldsBase = path.join(base, "backups", "worlds");
+      const worldsBase = path.join(base, 'backups', 'worlds');
       const worldDirs = fs.existsSync(worldsBase)
-        ? fs
-            .readdirSync(worldsBase, { withFileTypes: true })
-            .filter((d) => d.isDirectory())
-            .map((d) => d.name)
+        ? fs.readdirSync(worldsBase, { withFileTypes: true })
+            .filter(d => d.isDirectory())
+            .map(d => d.name)
         : [];
 
-      worldDirs.forEach((world) => {
+      worldDirs.forEach(world => {
         const dir = path.join(worldsBase, world);
-        const files = fs
-          .readdirSync(dir)
-          .filter((f) => f.endsWith(".zip"))
-          .map((file) => ({ filename: file, label: file }));
+        const files = fs.readdirSync(dir)
+          .filter(f => f.endsWith('.zip'))
+          .map(file => ({ filename: file, label: file }));
         worldBackups[world] = files;
       });
     } catch (err) {
-      console.error("getInfo worldBackups error:", err);
+      console.error('getInfo worldBackups error:', err);
     }
 
     // Backups del servidor
     let serverBackups = [];
     try {
-      const serverDir = path.join(base, "backups", "server");
+      const serverDir = path.join(base, 'backups', 'server');
       serverBackups = fs.existsSync(serverDir)
-        ? fs
-            .readdirSync(serverDir)
-            .filter((f) => f.endsWith(".zip"))
-            .map((file) => ({ filename: file, label: file }))
+        ? fs.readdirSync(serverDir)
+            .filter(f => f.endsWith('.zip'))
+            .map(file => ({ filename: file, label: file }))
         : [];
     } catch (err) {
-      console.error("getInfo serverBackups error:", err);
+      console.error('getInfo serverBackups error:', err);
     }
 
+    // Estado del servidor
     const serverEncendido = isServerRunning();
+
+    // Detectar cron de backups
     let cronActivo = false;
+    let intervalHours = null;
     try {
-      const { stdout } = await exec("crontab -l");
-      cronActivo = stdout.includes(getCronLine());
+      const script = scriptPath('backup_manual.sh');
+      const { stdout } = await exec('crontab -l');
+      const lines = stdout
+        .split('\n')
+        .map(l => l.trim())
+        .filter(l => l && l.includes(script));
+
+      if (lines.length > 0) {
+        cronActivo = true;
+        // extraer intervalo: buscamos "0 */<n> "
+        const m = lines[0].match(/^0 \*\/(\d+) /);
+        if (m) {
+          intervalHours = parseInt(m[1], 10);
+        }
+      }
     } catch {
       cronActivo = false;
     }
@@ -91,12 +105,14 @@ exports.getInfo = async (req, res) => {
       serverBackups,
       serverEncendido,
       cronActivo,
+      intervalHours
     });
   } catch (error) {
-    console.error("getInfo error:", error);
-    return res.status(500).json({ error: "Could not retrieve server info" });
+    console.error('getInfo error:', error);
+    return res.status(500).json({ error: 'Could not retrieve server info' });
   }
 };
+
 
 // GET /api/server/status
 exports.status = async (req, res) => {
