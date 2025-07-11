@@ -98,28 +98,32 @@ function _readServerProperties(basePath) {
     if (!line || line.startsWith('#')) continue;
     const [key, ...rest] = line.split('=');
     if (key.trim() === 'level-name') {
+      console.log(`🔍 level-name encontrado: ${rest.join('=')}`);
       return rest.join('=').trim();
     }
   }
   return null;
 }
-
 /**
  * Sincroniza estado.mundo_activo en server.yml leyendo server.properties
+ * @returns {string|null} el level-name leído o null si no existe
  */
 function syncMundoActivo() {
-  const cfg = _readConfig();
+  const cfg  = _readConfig();
   const base = cfg.paths.minecraft_server;
   const level = _readServerProperties(base);
-  if (level && cfg.estado.mundo_activo !== level) {
+  if (level) {
     cfg.estado = cfg.estado || {};
-    cfg.estado.mundo_activo = level;
-    _writeConfig(cfg);
-    console.log(`🔄 mundo_activo sincronizado a "${level}"`);
+    if (cfg.estado.mundo_activo !== level) {
+      cfg.estado.mundo_activo = level;
+      _writeConfig(cfg);
+      console.log(`🔄 mundo_activo sincronizado a "${level}"`);
+    }
+  } else {
+    console.warn(`⚠️ No se encontró server.properties en ${base}`);
   }
+  return level;
 }
-
-
 
 module.exports = {
   getMinecraftPath,
@@ -130,5 +134,5 @@ module.exports = {
   _writeConfig,
   admin_base_path,
   _readServerProperties,
-  syncMundoActivo,
+  syncMundoActivo  // ahora retorna el valor
 };
