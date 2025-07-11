@@ -8,6 +8,7 @@ const {
   setMinecraftPath,
   _readConfig,
   _writeConfig,
+  admin_base_path,
 } = require("../config/config");
 const {
   isServerRunning,
@@ -22,6 +23,13 @@ const {
 // Promisify exec and execFile for async/await
 const exec = util.promisify(cp.exec);
 const execFile = util.promisify(cp.execFile);
+
+// Helper: resolve script path under project root
+function scriptPath(scriptName) {
+  // Assuming scripts folder is at projectRoot/scripts
+  // projectRoot = admin_base_path/..  (config/config.js dirname)
+  return path.join(admin_base_path, "..", "scripts", scriptName);
+}
 
 // GET /api/server/path
 exports.getPath = async (req, res) => {
@@ -41,10 +49,11 @@ exports.setPath = async (req, res) => {
     if (!newPath) {
       return res.status(400).json({ error: "newPath is required" });
     }
-    if (!fs.existsSync(newPath)) {
+    const resolved = path.resolve(newPath);
+    if (!fs.existsSync(resolved)) {
       return res.status(400).json({ error: "Path does not exist" });
     }
-    setMinecraftPath(newPath);
+    setMinecraftPath(resolved);
     const updated = getMinecraftPath();
     return res.json({ message: "Path updated successfully", path: updated });
   } catch (error) {
@@ -60,7 +69,6 @@ exports.getInfo = async (req, res) => {
     const mensajes = cfg.mensajes || {};
     const mundoActivo = cfg.estado?.mundo_activo || "";
 
-    // Leer backups
     let backups = [];
     try {
       const backupsDir = path.join(getMinecraftPath(), "backups", "mundos");
@@ -72,7 +80,6 @@ exports.getInfo = async (req, res) => {
       console.error("getInfo backups error:", err);
     }
 
-    // Estado del servidor y cron
     const serverEncendido = isServerRunning();
     let cronActivo = false;
     try {
@@ -106,9 +113,7 @@ exports.status = async (req, res) => {
       uptime = getServerStartTime();
       clearLastStoppedTime();
     } else {
-      if (!getLastStoppedTime()) {
-        setLastStoppedTime();
-      }
+      if (!getLastStoppedTime()) setLastStoppedTime();
       lastStopped = getLastStoppedTime();
     }
 
@@ -127,9 +132,8 @@ exports.status = async (req, res) => {
 exports.sendMessage = async (req, res) => {
   try {
     const message = req.body.mensaje?.trim();
-    if (!message) {
-      return res.status(400).json({ error: "Empty message" });
-    }
+    if (!message) return res.status(400).json({ error: "Empty message" });
+
     const escaped = message.replace(/'/g, "\\'");
     const cmd = `screen -S minecraft_server -p 0 -X stuff 'say ${escaped}\\r'`;
     await exec(cmd);
@@ -147,13 +151,12 @@ exports.shutdown = async (req, res) => {
     if (![0, 2, 5, 10].includes(minutes)) {
       return res.status(400).json({ error: "Invalid shutdown time" });
     }
-    const script = path.join(
-      __dirname,
-      "..",
-      "scripts",
-      "apagar_con_avisos.sh"
-    );
-    await exec(`bash ${script} ${minutes}`);
+    const script = scriptPath("apagar_con_avisos.sh");
+    if (!fs.existsSync(script)) {
+      console.error("shutdown script not found:", script);
+      return res.status(500).json({ error: "Shutdown script not found" });
+    }
+    await exec(`bash "${script}" ${minutes}`);
     return res.json({
       message: `Server will shut down in ${minutes} minute(s)`,
     });
@@ -178,12 +181,17 @@ exports.restart = async (req, res) => {
 exports.backup = async (req, res) => {
   try {
     const base = getMinecraftPath();
-    const script = path.join(__dirname, "..", "scripts", "backup_manual.sh");
-    await exec(`bash ${script} "${base}"`);
+    const script = scriptPath("backup_manual.sh");
+    if (!fs.existsSync(script)) {
+      console.error("backup script not found:", script);
+      return res.status(500).json({ error: "Backup script not found" });
+    }
+    await exec(`bash "${script}" "${base}"`);
     return res.json({ message: "Backup started" });
   } catch (error) {
     console.error("backup error:", error);
-    return res.status(500).json({ error: "Failed to start backup" });
+    const detail = error.stderr || error.message;
+    return res.status(500).json({ error: `Failed to start backup: ${detail}` });
   }
 };
 
@@ -193,7 +201,6 @@ exports.backupToggle = async (req, res) => {
     const enable = req.body.habilitar === "true";
     const cronLine = getCronLine();
 
-    // Obtener líneas actuales de crontab
     let existing = "";
     try {
       ({ stdout: existing } = await exec("crontab -l"));
@@ -205,16 +212,10 @@ exports.backupToggle = async (req, res) => {
       .map((l) => l.trim())
       .filter((l) => l);
 
-    // Añadir o quitar
     let updated = lines;
-    if (enable && !updated.includes(cronLine)) {
-      updated.push(cronLine);
-    }
-    if (!enable) {
-      updated = updated.filter((l) => l !== cronLine);
-    }
+    if (enable && !updated.includes(cronLine)) updated.push(cronLine);
+    if (!enable) updated = updated.filter((l) => l !== cronLine);
 
-    // Aplicar nuevo crontab
     await new Promise((resolve, reject) => {
       const child = cp.spawn("crontab", ["-"]);
       child.stdin.write(updated.join("\n") + "\n");
@@ -236,20 +237,29 @@ exports.backupToggle = async (req, res) => {
 exports.restoreBackup = async (req, res) => {
   try {
     const { filename } = req.body;
-    if (!filename) {
+    if (!filename)
       return res.status(400).json({ error: "filename is required" });
-    }
+
     const base = getMinecraftPath();
     const backupPath = path.join(base, "backups", "mundos", filename);
     if (!fs.existsSync(backupPath)) {
       return res.status(404).json({ error: "Backup file not found" });
     }
-    const script = path.join(__dirname, "..", "scripts", "restaurar_backup.sh");
+
+    const script = scriptPath("restaurar_backup.sh");
+    if (!fs.existsSync(script)) {
+      console.error("restore script not found:", script);
+      return res.status(500).json({ error: "Restore script not found" });
+    }
+
     await execFile(script, [backupPath, base]);
     return res.json({ message: `Backup restored: ${filename}` });
   } catch (error) {
     console.error("restoreBackup error:", error);
-    return res.status(500).json({ error: "Failed to restore backup" });
+    const detail = error.stderr || error.message;
+    return res
+      .status(500)
+      .json({ error: `Failed to restore backup: ${detail}` });
   }
 };
 
@@ -257,11 +267,7 @@ exports.restoreBackup = async (req, res) => {
 exports.saveMessages = async (req, res) => {
   try {
     const { bienvenida, noticias, despedida } = req.body;
-    if (
-      typeof bienvenida !== "string" ||
-      typeof noticias !== "string" ||
-      typeof despedida !== "string"
-    ) {
+    if ([bienvenida, noticias, despedida].some((v) => typeof v !== "string")) {
       return res.status(400).json({ error: "Invalid message payload" });
     }
     const cfg = _readConfig();
@@ -278,7 +284,7 @@ exports.saveMessages = async (req, res) => {
 exports.start = async (req, res) => {
   try {
     const base = getMinecraftPath();
-    const cmd = `screen -dmS minecraft_server bash -c "cd ${base} && LD_LIBRARY_PATH=. ./bedrock_server"`;
+    const cmd = `screen -dmS minecraft_server bash -c \"cd ${base} && LD_LIBRARY_PATH=. ./bedrock_server\"`;
     await exec(cmd);
     return res.json({ message: "Server started" });
   } catch (error) {
@@ -300,17 +306,16 @@ exports.stop = async (req, res) => {
             ? `⚠ Shutting down in ${seconds} second...`
             : `⚠ Shutting down in ${seconds} seconds...`;
         cp.exec(
-          `screen -S minecraft_server -p 0 -X stuff "say ${msg}$(printf '')"`,
+          `screen -S minecraft_server -p 0 -X stuff \"say ${msg}$(printf '')\"`,
           (err) => {
             if (err) console.error("shutdown message error:", err);
           }
         );
         if (seconds-- === 0) {
           clearInterval(interval);
-          const stopCmd = `screen -S minecraft_server -p 0 -X stuff "stop$(printf '')"`;
+          const stopCmd = `screen -S minecraft_server -p 0 -X stuff \"stop$(printf '')\"`;
           cp.exec(stopCmd, (err) => {
-            if (err) return reject(err);
-            resolve();
+            err ? reject(err) : resolve();
           });
         }
       }, 1000);
