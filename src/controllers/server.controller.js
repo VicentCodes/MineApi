@@ -66,12 +66,23 @@ exports.getInfo = async (req, res) => {
     const mensajes = cfg.mensajes || {};
     const mundoActivo = cfg.estado?.mundo_activo || "";
     let backups = [];
+    let serverBackups = "";
     try {
-      const backupsDir = path.join(getMinecraftPath(), "backups", "mundos");
+      const backupsDir = path.join(getMinecraftPath(), "backups", "config");
       backups = fs
         .readdirSync(backupsDir)
         .filter((f) => f.endsWith(".zip"))
         .map((file) => ({ filename: file, label: file }));
+
+      const serverBackupsDir = path.join(getMinecraftPath(), "backups", "config");
+      serverBackups = fs
+        .readdirSync(serverBackupsDir)
+        .filter((f) => f.endsWith(".zip"))
+        .map((file) => ({ filename: file, label: file }));
+
+
+
+
     } catch (err) {
       console.error("getInfo backups error:", err);
     }
@@ -87,6 +98,7 @@ exports.getInfo = async (req, res) => {
       mensajes,
       mundoActivo,
       backups,
+      serverBackupsDir,
       serverEncendido,
       cronActivo,
     });
