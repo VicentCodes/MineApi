@@ -24,11 +24,11 @@ const {
 const exec = util.promisify(cp.exec);
 const execFile = util.promisify(cp.execFile);
 
-// Helper: resolve script path under project root
+// Helper: resolve script path under config/scripts directory
 function scriptPath(scriptName) {
-  // Assuming scripts folder is at projectRoot/scripts
-  // projectRoot = admin_base_path/..  (config/config.js dirname)
-  return path.join(admin_base_path, "..", "scripts", scriptName);
+  // admin_base_path = .../src/config
+  // scripts are in .../src/config/scripts
+  return path.join(admin_base_path, "scripts", scriptName);
 }
 
 // GET /api/server/path
@@ -133,7 +133,6 @@ exports.sendMessage = async (req, res) => {
   try {
     const message = req.body.mensaje?.trim();
     if (!message) return res.status(400).json({ error: "Empty message" });
-
     const escaped = message.replace(/'/g, "\\'");
     const cmd = `screen -S minecraft_server -p 0 -X stuff 'say ${escaped}\\r'`;
     await exec(cmd);
@@ -284,7 +283,7 @@ exports.saveMessages = async (req, res) => {
 exports.start = async (req, res) => {
   try {
     const base = getMinecraftPath();
-    const cmd = `screen -dmS minecraft_server bash -c \"cd ${base} && LD_LIBRARY_PATH=. ./bedrock_server\"`;
+    const cmd = `screen -dmS minecraft_server bash -c "cd ${base} && LD_LIBRARY_PATH=. ./bedrock_server"`;
     await exec(cmd);
     return res.json({ message: "Server started" });
   } catch (error) {
