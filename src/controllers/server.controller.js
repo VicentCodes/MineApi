@@ -1,4 +1,4 @@
-// controllers/server.controller.js
+// src/controllers/server.controller.js
 
 const fs = require("fs");
 const path = require("path");
@@ -12,6 +12,7 @@ const {
   _writeConfig,
   admin_base_path,
 } = require("../config/config");
+
 const {
   isServerRunning,
   getServerStartTime,
@@ -123,6 +124,17 @@ exports.status = async (req, res) => {
   }
 };
 
+// GET /api/server/path
+exports.getPath = async (req, res) => {
+  try {
+    const serverPath = getMinecraftPath();
+    return res.json({ path: serverPath });
+  } catch (error) {
+    console.error("getPath error:", error);
+    return res.status(500).json({ error: "Could not retrieve Minecraft path" });
+  }
+};
+
 // POST /api/server/path
 exports.setPath = async (req, res) => {
   try {
@@ -141,6 +153,50 @@ exports.setPath = async (req, res) => {
   } catch (error) {
     console.error("setPath error:", error);
     return res.status(500).json({ error: "Failed to set Minecraft path" });
+  }
+};
+
+// POST /api/server/send-message
+exports.sendMessage = async (req, res) => {
+  try {
+    const message = req.body.mensaje?.trim();
+    if (!message) return res.status(400).json({ error: "Empty message" });
+    const escaped = message.replace(/'/g, "\\'");
+    await exec(`screen -S minecraft_server -p 0 -X stuff 'say ${escaped}\\r'`);
+    return res.json({ message: "Message sent" });
+  } catch (error) {
+    console.error("sendMessage error:", error);
+    return res.status(500).json({ error: "Failed to send message" });
+  }
+};
+
+// POST /api/server/shutdown
+exports.shutdown = async (req, res) => {
+  try {
+    const minutes = parseInt(req.body.tiempo, 10);
+    if (![0, 2, 5, 10].includes(minutes))
+      return res.status(400).json({ error: "Invalid shutdown time" });
+    const script = scriptPath("apagar_con_avisos.sh");
+    if (!fs.existsSync(script))
+      return res.status(500).json({ error: "Shutdown script not found" });
+    await exec(`bash "${script}" ${minutes}`);
+    return res.json({
+      message: `Server will shut down in ${minutes} minute(s)`,
+    });
+  } catch (error) {
+    console.error("shutdown error:", error);
+    return res.status(500).json({ error: "Shutdown command failed" });
+  }
+};
+
+// POST /api/server/restart
+exports.restart = async (req, res) => {
+  try {
+    await restartServer();
+    return res.json({ message: "Server restarted" });
+  } catch (error) {
+    console.error("restart error:", error);
+    return res.status(500).json({ error: "Failed to restart server" });
   }
 };
 
@@ -209,20 +265,30 @@ exports.backupToggle = async (req, res) => {
   }
 };
 
-
 // POST /api/server/restore-backup
 exports.restoreBackup = async (req, res) => {
   try {
     const { filename } = req.body;
     if (!filename)
       return res.status(400).json({ error: "filename is required" });
+
     const base = getMinecraftPath();
-    const backupPath = path.join(base, "backups", "mundos", filename);
+    const cfg = _readConfig();
+    const activeWorld = cfg.estado?.mundo_activo || "";
+    const backupPath = path.join(
+      base,
+      "backups",
+      "worlds",
+      activeWorld,
+      filename
+    );
     if (!fs.existsSync(backupPath))
       return res.status(404).json({ error: "Backup file not found" });
+
     const script = scriptPath("restaurar_backup.sh");
     if (!fs.existsSync(script))
       return res.status(500).json({ error: "Restore script not found" });
+
     await execFile(script, [backupPath, base]);
     return res.json({ message: `Backup restored: ${filename}` });
   } catch (error) {
@@ -238,8 +304,9 @@ exports.restoreBackup = async (req, res) => {
 exports.saveMessages = async (req, res) => {
   try {
     const { bienvenida, noticias, despedida } = req.body;
-    if ([bienvenida, noticias, despedida].some((v) => typeof v !== "string"))
+    if ([bienvenida, noticias, despedida].some((v) => typeof v !== "string")) {
       return res.status(400).json({ error: "Invalid message payload" });
+    }
     const cfg = _readConfig();
     cfg.mensajes = { bienvenida, noticias, despedida };
     _writeConfig(cfg);
