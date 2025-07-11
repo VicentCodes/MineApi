@@ -1,14 +1,14 @@
-const { syncMundoActivo } = require("./src/config/config");
+const { syncActiveWorld } = require("../config/config");
 const http = require("http");
-const app = require("./src/app");
+const app = require("../app");
 
 const PORT = process.env.PORT || 19130;
 
-// Llamas una sola vez, guardas en `mundo` y luego lo muestras
-const mundo = syncMundoActivo();
+// Sync active world once and start server
+const currentWorld = syncActiveWorld();
 
 http.createServer(app).listen(PORT, () => {
   console.log(
-    `API escuchando en puerto ${PORT}, mundo activo sincronizado: ${mundo}`
+    `API listening on port ${PORT}, active world synced: ${currentWorld}`
   );
 });
