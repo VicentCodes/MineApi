@@ -231,39 +231,58 @@ exports.backup = async (req, res) => {
 // POST /api/server/backup-toggle
 exports.backupToggle = async (req, res) => {
   try {
-    const enable = req.body.habilitar === "true";
-    const cronLine = getCronLine();
+    const enable    = req.body.habilitar === "true";
+    // Horas de intervalo, por defecto 4h
+    let intervalHrs = parseInt(req.body.interval, 10);
+    if (isNaN(intervalHrs) || intervalHrs < 1) intervalHrs = 4;
+
+    const base        = getMinecraftPath();
+    const cfg         = _readConfig();
+    const activeWorld = cfg.estado?.mundo_activo || "";
+    const script      = scriptPath("backup_manual.sh");
+
+    // Línea cron que ejecuta el backup
+    // A la hora 0 de cada `intervalHrs` horas
+    const cronCmd = `bash "${script}" "${base}" "${activeWorld}"`;
+    const cronLine = `0 */${intervalHrs} * * * ${cronCmd}`;
+
+    // Leer crontab actual
     let existing = "";
+    try { ({ stdout: existing } = await exec("crontab -l")); } catch {}
 
-    try {
-      ({ stdout: existing } = await exec("crontab -l"));
-    } catch {}
-
+    // Filtrar líneas vacías y existentes que no sean de nuestro backup_manual.sh
     const lines = existing
       .split("\n")
-      .map((l) => l.trim())
-      .filter((l) => l);
-    let updated = lines;
+      .filter(l => l.trim() && !l.includes(script));
 
-    if (enable && !updated.includes(cronLine)) updated.push(cronLine);
-    if (!enable) updated = updated.filter((l) => l !== cronLine);
+    // Si habilitamos, añadimos la nueva línea; si no, la dejamos fuera
+    if (enable) {
+      lines.push(cronLine);
+    }
 
+    // Escribimos el nuevo crontab
     await new Promise((resolve, reject) => {
       const child = cp.spawn("crontab", ["-"]);
-      child.stdin.write(updated.join("\n") + "\n");
+      child.stdin.write(lines.join("\n") + "\n");
       child.stdin.end();
       child.on("error", reject);
-      child.on("close", (code) =>
-        code === 0 ? resolve() : reject(new Error(`crontab exited ${code}`))
+      child.on("close", code =>
+        code === 0
+          ? resolve()
+          : reject(new Error(`crontab exited ${code}`))
       );
     });
 
-    return res.json({ cronActive: enable });
+    return res.json({
+      cronActive: enable,
+      intervalHours: enable ? intervalHrs : null
+    });
   } catch (error) {
     console.error("backupToggle error:", error);
     return res.status(500).json({ error: "Failed to toggle backup cron" });
   }
 };
+
 
 // POST /api/server/restore-backup
 exports.restoreBackup = async (req, res) => {
