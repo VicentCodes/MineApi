@@ -1,63 +1,90 @@
-const path = require('path');
-const fs   = require('fs');
+// config/config.js
+const fs = require("fs");
+const path = require("path");
+const yaml = require("js-yaml");
 
-const CONFIG_PATH = path.join(__dirname, 'ruta_server.json');
+const CONFIG_DIR = path.join(__dirname);
+const CONFIG_PATH = path.join(CONFIG_DIR, "server.yml");
 const admin_base_path = __dirname;
 
+// Asegura que exista el directorio y el archivo YAML
+function _ensureConfig() {
+  if (!fs.existsSync(CONFIG_PATH)) {
+    const defaultConfig = {
+      paths: {
+        api_server: admin_base_path,
+        minecraft_server: "/home/minecraft/bedrock-server",
+      },
+      mensajes: {
+        bienvenida: "",
+        noticias: "",
+        despedida: "",
+      },
+      estado: {
+        mundo_activo: "",
+      },
+    };
+    fs.writeFileSync(
+      CONFIG_PATH,
+      yaml.dump(defaultConfig, { noRefs: true, lineWidth: 120 }) + "\n",
+      "utf8"
+    );
+  }
+}
+
+// Lee y parsea el YAML
 function _readConfig() {
   try {
-    return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+    _ensureConfig();
+    const text = fs.readFileSync(CONFIG_PATH, "utf8");
+    return yaml.load(text) || {};
   } catch {
     return {};
   }
 }
 
-function _writeConfig(config) {
+// Serializa y guarda el objeto como YAML
+function _writeConfig(cfg) {
   fs.writeFileSync(
     CONFIG_PATH,
-    JSON.stringify(config, null, 2) + '\n'
+    yaml.dump(cfg, { noRefs: true, lineWidth: 120 }) + "\n",
+    "utf8"
   );
 }
 
-// Inicializa y persiste api_server_path si no existe
+// Inicializa api_server_path si hace falta
 (function ensureApiPath() {
   const cfg = _readConfig();
-  if (!cfg.api_server_path) {
-    cfg.api_server_path = admin_base_path;
+  if (!cfg.paths) cfg.paths = {};
+  if (!cfg.paths.api_server) {
+    cfg.paths.api_server = admin_base_path;
     _writeConfig(cfg);
   }
 })();
 
-// Obtiene la ruta del servidor de Minecraft
 function getMinecraftPath() {
   const cfg = _readConfig();
-  return cfg.minecraft_server_path || '/home/minecraft/bedrock-server';
+  return cfg.paths.minecraft_server;
 }
-
-// Actualiza la ruta del servidor de Minecraft en el JSON
 function setMinecraftPath(newPath) {
   const cfg = _readConfig();
-  cfg.minecraft_server_path = newPath;
+  cfg.paths.minecraft_server = path.resolve(newPath);
   _writeConfig(cfg);
+  if (!fs.existsSync(cfg.paths.minecraft_server)) {
+    fs.mkdirSync(cfg.paths.minecraft_server, { recursive: true });
+  }
 }
-
-// Obtiene la ruta del servidor API SIN retroceder dos niveles
 function getApiPath() {
   const cfg = _readConfig();
-  return cfg.api_server_path || admin_base_path;
+  return cfg.paths.api_server;
 }
-
-// Actualiza la ruta del servidor API en el JSON, creando el directorio si hace falta
 function setApiPath(newPath) {
   const cfg = _readConfig();
-  cfg.api_server_path = path.resolve(newPath);
+  cfg.paths.api_server = path.resolve(newPath);
   _writeConfig(cfg);
-
-  if (!fs.existsSync(cfg.api_server_path)) {
-    fs.mkdirSync(cfg.api_server_path, { recursive: true });
+  if (!fs.existsSync(cfg.paths.api_server)) {
+    fs.mkdirSync(cfg.paths.api_server, { recursive: true });
   }
-
-  return cfg.api_server_path;
 }
 
 module.exports = {
@@ -65,5 +92,7 @@ module.exports = {
   setMinecraftPath,
   getApiPath,
   setApiPath,
-  admin_base_path
+  _readConfig,
+  _writeConfig,
+  admin_base_path,
 };
