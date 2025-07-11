@@ -1,20 +1,22 @@
-// services/mc.service.js
+// src/services/mc.service.js
+
 const fs = require("fs");
 const path = require("path");
 const { execFile, execSync } = require("child_process");
 const { getMinecraftPath } = require("../config/config");
 
-// Reinicia el servidor con avisos
+// Restart the server with warnings
 async function restartServer() {
   return new Promise((resolve, reject) => {
     const script = path.join(
       __dirname,
       "..",
       "scripts",
-      "reiniciar_con_avisos.sh"
+      "restart_with_warnings.sh"
     );
     execFile(script, (err) => {
       if (err) return reject(err);
+      // wait 10s then start fresh
       setTimeout(() => {
         const cmd = `screen -dmS minecraft_server bash -c "cd ${getMinecraftPath()} && LD_LIBRARY_PATH=. ./bedrock_server"`;
         execFile(cmd, (err2) => (err2 ? reject(err2) : resolve()));
@@ -23,7 +25,7 @@ async function restartServer() {
   });
 }
 
-// Convierte "DD-HH:MM:SS" a milisegundos
+// Convert "DD-HH:MM:SS" to milliseconds
 function etimeToMilliseconds(etime) {
   if (!etime) return 0;
   const regex = /(?:(\d+)-)?(?:(\d+):)?(\d+):(\d+)/;
@@ -36,7 +38,7 @@ function etimeToMilliseconds(etime) {
   return (((days * 24 + hours) * 60 + minutes) * 60 + seconds) * 1000;
 }
 
-// ¿El proceso bedrock_server está vivo?
+// Is the bedrock_server process alive?
 function isServerRunning() {
   try {
     const out = execSync(
@@ -48,7 +50,7 @@ function isServerRunning() {
   }
 }
 
-// Hora de inicio en ISO
+// Get server start time in ISO
 function getServerStartTime() {
   try {
     const out = execSync("ps aux | grep bedrock_server | grep -v grep")
@@ -64,7 +66,7 @@ function getServerStartTime() {
   }
 }
 
-// Archivo donde guardamos la última hora de apagado
+// Path to store last stopped timestamp
 function getLastStoppedFilePath() {
   return path.join(__dirname, "..", "config", ".bedrock_server_last_stopped");
 }
@@ -84,9 +86,9 @@ function clearLastStoppedTime() {
   if (fs.existsSync(file)) fs.unlinkSync(file);
 }
 
-// Línea de cron para backups automáticos
-function getCronLine() {
-  const script = path.join(__dirname, "..", "scripts", "backup_manual.sh");
+// Default cron entry for backups every 4h
+function getCronEntry() {
+  const script = path.join(__dirname, "..", "scripts", "manual_backup.sh");
   return `0 */4 * * * bash ${script} "${getMinecraftPath()}"`;
 }
 
@@ -97,5 +99,5 @@ module.exports = {
   getLastStoppedTime,
   setLastStoppedTime,
   clearLastStoppedTime,
-  getCronLine,
+  getCronEntry,
 };

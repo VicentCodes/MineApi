@@ -1,63 +1,62 @@
 #!/bin/bash
-# backup_manual.sh
+# scripts/manual_backup.sh
 
-# Verifica que recibió los argumentos
+# Usage: manual_backup.sh <server_base_path> <world_name>
 if [ $# -lt 2 ]; then
-  echo "Uso: $0 <ruta_base_servidor> <nombre_mundo>"
+  echo "Usage: $0 <server_base_path> <world_name>"
   exit 1
 fi
 
-RUTA_BASE="$1"
-MUNDO_ACTIVO="$2"
-FECHA=$(date +"%Y-%m-%d_%H-%M-%S")
+BASE_PATH="$1"
+WORLD_NAME="$2"
+TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
 
-# Orígenes
-ORIGEN_MUNDOS="$RUTA_BASE/worlds/$MUNDO_ACTIVO"
+# World folder
+SOURCE_WORLDS="$BASE_PATH/worlds/$WORLD_NAME"
 
-# Detecta carpeta de configuración real
-if [ -d "$RUTA_BASE/server_config" ]; then
-  ORIGEN_CONFIG="$RUTA_BASE/server_config"
-elif [ -d "$RUTA_BASE/config" ]; then
-  ORIGEN_CONFIG="$RUTA_BASE/config"
+# Detect actual config folder
+if [ -d "$BASE_PATH/server_config" ]; then
+  SOURCE_CONFIG="$BASE_PATH/server_config"
+elif [ -d "$BASE_PATH/config" ]; then
+  SOURCE_CONFIG="$BASE_PATH/config"
 else
-  echo "❌ No existe carpeta de configuración (server_config/ ni config/)"
+  echo "❌ No config folder found (server_config/ or config/)"
   exit 1
 fi
 
-# Destinos
-DESTINO_MUNDOS="$RUTA_BASE/backups/worlds/$MUNDO_ACTIVO"
-DESTINO_SERVER="$RUTA_BASE/backups/server"
+# Destinations
+DEST_WORLDS="$BASE_PATH/backups/worlds/$WORLD_NAME"
+DEST_SERVER="$BASE_PATH/backups/server"
 
-# Crear carpetas de backup si no existen
-mkdir -p "$DESTINO_MUNDOS"  || { echo "❌ No se pudo crear $DESTINO_MUNDOS"; exit 1; }
-mkdir -p "$DESTINO_SERVER"  || { echo "❌ No se pudo crear $DESTINO_SERVER"; exit 1; }
+# Create backup folders
+mkdir -p "$DEST_WORLDS"  || { echo "❌ Could not create $DEST_WORLDS"; exit 1; }
+mkdir -p "$DEST_SERVER"  || { echo "❌ Could not create $DEST_SERVER"; exit 1; }
 
-# Mensaje al servidor (no aborta si falla la notificación)
-screen -S minecraft_server -p 0 -X stuff "say Iniciando backup...$(printf \\r)" 2>/dev/null || true
-screen -S minecraft_server -p 0 -X stuff "save-all$(printf \\r)"              2>/dev/null || true
+# Notify server (ignore failures)
+screen -S minecraft_server -p 0 -X stuff "say Starting backup...$(printf \\r)" 2>/dev/null || true
+screen -S minecraft_server -p 0 -X stuff "save-all$(printf \\r)"           2>/dev/null || true
 sleep 2
 
-# 1) Backup del mundo activo (solo la carpeta del mundo)
-NOMBRE_BACKUP_MUNDOS="backup_mundos_${MUNDO_ACTIVO}_${FECHA}.zip"
-if [ -d "$ORIGEN_MUNDOS" ]; then
-  # Nos movemos dentro de worlds para que el zip solo contenga <MUNDO_ACTIVO>/
-  (cd "$RUTA_BASE/worlds" && zip -r "$DESTINO_MUNDOS/$NOMBRE_BACKUP_MUNDOS" "$MUNDO_ACTIVO") \
-    && echo "✅ Mundo comprimido en $DESTINO_MUNDOS/$NOMBRE_BACKUP_MUNDOS" \
-    || { echo "❌ Error al comprimir mundo"; exit 1; }
+# 1) World backup
+WORLD_ARCHIVE="world_backup_${WORLD_NAME}_${TIMESTAMP}.zip"
+if [ -d "$SOURCE_WORLDS" ]; then
+  (cd "$BASE_PATH/worlds" && zip -r "$DEST_WORLDS/$WORLD_ARCHIVE" "$WORLD_NAME") \
+    && echo "✅ World archived to $DEST_WORLDS/$WORLD_ARCHIVE" \
+    || { echo "❌ Error compressing world"; exit 1; }
 else
-  echo "⚠ El mundo '$MUNDO_ACTIVO' no existe. No se realizará el backup."
+  echo "⚠ World '$WORLD_NAME' does not exist. Skipping."
   exit 1
 fi
 
-# 2) Backup del servidor (config, plugins, etc.)
-NOMBRE_BACKUP_SERVER="backup_server_${FECHA}.zip"
-zip -r "$DESTINO_SERVER/$NOMBRE_BACKUP_SERVER" "$ORIGEN_CONFIG" \
-  && echo "✅ Servidor comprimido en $DESTINO_SERVER/$NOMBRE_BACKUP_SERVER" \
-  || { echo "❌ Error al comprimir servidor"; exit 1; }
+# 2) Server backup (config, plugins, etc.)
+SERVER_ARCHIVE="server_backup_${TIMESTAMP}.zip"
+zip -r "$DEST_SERVER/$SERVER_ARCHIVE" "$SOURCE_CONFIG" \
+  && echo "✅ Server archived to $DEST_SERVER/$SERVER_ARCHIVE" \
+  || { echo "❌ Error compressing server"; exit 1; }
 
-# Mensaje de fin (ignora errores de screen)
+# Notify completion
 screen -S minecraft_server -p 0 -X stuff \
-  "say Backup completo: $NOMBRE_BACKUP_MUNDOS y $NOMBRE_BACKUP_SERVER$(printf \\r)" \
+  "say Backup complete: $WORLD_ARCHIVE and $SERVER_ARCHIVE$(printf \\r)" \
   2>/dev/null || true
 
 exit 0
