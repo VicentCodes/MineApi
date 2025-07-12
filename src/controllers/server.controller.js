@@ -10,8 +10,7 @@ const {
   setMinecraftPath,
   _readConfig,
   _writeConfig,
-  admin_base_path,
-  humanizeBackupName,
+  admin_base_path
 } = require("../config/config");
 
 const {
@@ -21,6 +20,7 @@ const {
   setLastStoppedTime,
   clearLastStoppedTime,
   restartServer,
+  humanizeBackupName,
 } = require("../services/mc.service");
 
 const exec = util.promisify(cp.exec);
