@@ -289,18 +289,27 @@ exports.backupToggle = async (req, res) => {
 
 // POST /api/server/restore
 exports.restoreBackup = async (req, res) => {
+  console.log("[restoreBackup] Invocado");
   try {
     const { filename } = req.body;
-    if (!filename)
+    console.log("[restoreBackup] Parámetro filename:", filename);
+    if (!filename) {
+      console.warn("[restoreBackup] Error: filename es requerido");
       return res.status(400).json({ error: "filename is required" });
+    }
 
     const basePath = getMinecraftPath();
+    console.log("[restoreBackup] basePath:", basePath);
+
     const cfg = _readConfig();
     const activeWorld = cfg.state?.activeWorld;
-    if (!activeWorld)
+    console.log("[restoreBackup] activeWorld:", activeWorld);
+    if (!activeWorld) {
+      console.warn("[restoreBackup] Error: No activeWorld definido en config");
       return res
         .status(400)
         .json({ error: "No activeWorld definido en server.yml" });
+    }
 
     const backupPath = path.join(
       basePath,
@@ -309,29 +318,42 @@ exports.restoreBackup = async (req, res) => {
       activeWorld,
       filename
     );
-    if (!fs.existsSync(backupPath))
+    console.log("[restoreBackup] backupPath:", backupPath);
+    if (!fs.existsSync(backupPath)) {
+      console.error("[restoreBackup] Error: backup file no encontrado");
       return res.status(404).json({ error: "Backup file not found" });
+    }
 
     const script = scriptPath("restore_backup.sh");
-    if (!fs.existsSync(script))
+    console.log("[restoreBackup] scriptPath:", script);
+    if (!fs.existsSync(script)) {
+      console.error("[restoreBackup] Error: restore script no encontrado");
       return res.status(500).json({ error: "Restore script not found" });
+    }
 
-    // Ejecutamos el script siempre con bash para asegurar diagnóstico
-    const { stdout, stderr } = await exec(
-      `bash "${script}" "${backupPath}" "${basePath}" "${activeWorld}"`
-    );
-    console.log("restore stdout:", stdout);
-    if (stderr) console.error("restore stderr:", stderr);
+    const cmd = `bash "${script}" "${backupPath}" "${basePath}" "${activeWorld}"`;
+    console.log("[restoreBackup] Ejecutando comando:", cmd);
+    const { stdout, stderr } = await exec(cmd);
 
+    console.log("[restoreBackup] stdout:", stdout.trim() || "(sin salida)");
+    if (stderr) console.error("[restoreBackup] stderr:", stderr.trim());
+
+    console.log("[restoreBackup] ¡Script de restauración finalizado con éxito!");
     return res.json({ message: `Backup restored: ${filename}` });
+
   } catch (error) {
-    console.error("restoreBackup error:", error);
+    console.error("[restoreBackup] ERROR en la ejecución:", error);
+    // Si es un error de exec, quizá tenga stdout/stderr
+    if (error.stdout) console.error("[restoreBackup] error.stdout:", error.stdout);
+    if (error.stderr) console.error("[restoreBackup] error.stderr:", error.stderr);
+
     const detail = error.stderr || error.message;
     return res
       .status(500)
       .json({ error: `Failed to restore backup: ${detail}` });
   }
 };
+
 
 // POST /api/server/save-messages
 exports.saveMessages = async (req, res) => {
