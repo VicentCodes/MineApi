@@ -26,27 +26,28 @@ function scriptPath(scriptName) {
 // GET /api/server
 exports.getInfo = async (req, res) => {
   try {
-    const cfg = _readConfig(); // use imported helper
+    const cfg = _readConfig();
     const messages = cfg.messages || {};
     const activeWorld = cfg.state?.activeWorld || "";
 
+    // Paths
     const basePath = getMinecraftPath();
+    const adminPath = admin_base_path;
 
     // World backups
     const worldBackups = {};
     const worldsBase = path.join(basePath, "backups", "worlds");
     if (fs.existsSync(worldsBase)) {
       fs.readdirSync(worldsBase, { withFileTypes: true })
-        .filter((d) => d.isDirectory())
-        .map((d) => d.name)
-        .forEach((world) => {
+        .filter(d => d.isDirectory())
+        .map(d => d.name)
+        .forEach(world => {
           const dir = path.join(worldsBase, world);
-          const files = fs
-            .readdirSync(dir)
-            .filter((f) => f.endsWith(".zip"))
-            .map((file) => ({
+          const files = fs.readdirSync(dir)
+            .filter(f => f.endsWith(".zip"))
+            .map(file => ({
               filename: file,
-              label: humanizeBackupName(file),
+              label: humanizeBackupName(file)
             }));
           worldBackups[world] = files;
         });
@@ -56,42 +57,45 @@ exports.getInfo = async (req, res) => {
     let serverBackups = [];
     const serverDir = path.join(basePath, "backups", "server");
     if (fs.existsSync(serverDir)) {
-      serverBackups = fs
-        .readdirSync(serverDir)
-        .filter((f) => f.endsWith(".zip"))
-        .map((file) => ({
+      serverBackups = fs.readdirSync(serverDir)
+        .filter(f => f.endsWith(".zip"))
+        .map(file => ({
           filename: file,
-          label: humanizeBackupName(file),
+          label: humanizeBackupName(file)
         }));
     }
 
-    // Server running status
+    // Server status
     const serverRunning = isServerRunning();
 
-    // Detect backup cron job
+    // Backup cron detection
     let cronActive = false;
     let intervalHours = null;
     try {
       const script = scriptPath("backup_manual.sh");
       const { stdout } = await exec("crontab -l");
-      const line = stdout.split("\n").find((l) => l.includes(script));
+      const line = stdout.split("\n").find(l => l.includes(script));
       if (line) {
         cronActive = true;
         const m = line.match(/^0 \*\/(\d+) /);
         if (m) intervalHours = parseInt(m[1], 10);
       }
     } catch {
-      cronActive = false;
+      // no cron entry
     }
 
     return res.json({
       messages,
       activeWorld,
+      paths: {
+        minecraft: basePath,
+        admin: adminPath
+      },
       worldBackups,
       serverBackups,
       serverRunning,
       cronActive,
-      intervalHours,
+      intervalHours
     });
   } catch (error) {
     console.error("getInfo error:", error);
