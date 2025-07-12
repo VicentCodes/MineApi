@@ -11,6 +11,7 @@ const {
   _readConfig,
   _writeConfig,
   admin_base_path,
+  humanizeBackupName,
 } = require("../config/config");
 
 const {
