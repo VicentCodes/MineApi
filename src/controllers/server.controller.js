@@ -7,24 +7,18 @@ const cp = require("child_process");
 
 const {
   getMinecraftPath,
-  setMinecraftPath,
   _readConfig,
-  _writeConfig,
-  admin_base_path
+  admin_base_path,
 } = require("../config/config");
 
 const {
   isServerRunning,
-  getServerStartTime,
-  getLastStoppedTime,
-  setLastStoppedTime,
-  clearLastStoppedTime,
-  restartServer,
   humanizeBackupName,
 } = require("../services/mc.service");
 
 const exec = util.promisify(cp.exec);
 
+// Build absolute path to a script under admin_base_path
 function scriptPath(scriptName) {
   return path.join(admin_base_path, "scripts", scriptName);
 }
@@ -32,8 +26,7 @@ function scriptPath(scriptName) {
 // GET /api/server
 exports.getInfo = async (req, res) => {
   try {
-    // Load config and state
-    const cfg = require("../config/config").readConfig();
+    const cfg = _readConfig(); // use imported helper
     const messages = cfg.messages || {};
     const activeWorld = cfg.state?.activeWorld || "";
 
@@ -43,22 +36,20 @@ exports.getInfo = async (req, res) => {
     const worldBackups = {};
     const worldsBase = path.join(basePath, "backups", "worlds");
     if (fs.existsSync(worldsBase)) {
-      const worldDirs = fs
-        .readdirSync(worldsBase, { withFileTypes: true })
+      fs.readdirSync(worldsBase, { withFileTypes: true })
         .filter((d) => d.isDirectory())
-        .map((d) => d.name);
-
-      worldDirs.forEach((world) => {
-        const dir = path.join(worldsBase, world);
-        const files = fs
-          .readdirSync(dir)
-          .filter((f) => f.endsWith(".zip"))
-          .map((file) => ({
-            filename: file,
-            label: humanizeBackupName(file),
-          }));
-        worldBackups[world] = files;
-      });
+        .map((d) => d.name)
+        .forEach((world) => {
+          const dir = path.join(worldsBase, world);
+          const files = fs
+            .readdirSync(dir)
+            .filter((f) => f.endsWith(".zip"))
+            .map((file) => ({
+              filename: file,
+              label: humanizeBackupName(file),
+            }));
+          worldBackups[world] = files;
+        });
     }
 
     // Server backups
@@ -77,18 +68,13 @@ exports.getInfo = async (req, res) => {
     // Server running status
     const serverRunning = isServerRunning();
 
-    // Detect cron job for backups
+    // Detect backup cron job
     let cronActive = false;
     let intervalHours = null;
     try {
-      const scriptPath = path.join(
-        __dirname,
-        "..",
-        "scripts",
-        "backup_manual.sh"
-      );
+      const script = scriptPath("backup_manual.sh");
       const { stdout } = await exec("crontab -l");
-      const line = stdout.split("\n").find((l) => l.includes(scriptPath));
+      const line = stdout.split("\n").find((l) => l.includes(script));
       if (line) {
         cronActive = true;
         const m = line.match(/^0 \*\/(\d+) /);
@@ -253,7 +239,9 @@ exports.backupWorld = async (req, res) => {
 
     if (!fs.existsSync(script)) {
       console.error("backup_world script not found:", script);
-      return res.status(500).json({ error: "Script de backup de mundo no encontrado" });
+      return res
+        .status(500)
+        .json({ error: "Script de backup de mundo no encontrado" });
     }
 
     const { stdout, stderr } = await exec(
@@ -279,12 +267,12 @@ exports.backupConfig = async (req, res) => {
 
     if (!fs.existsSync(script)) {
       console.error("backup_server script not found:", script);
-      return res.status(500).json({ error: "Script de backup de servidor no encontrado" });
+      return res
+        .status(500)
+        .json({ error: "Script de backup de servidor no encontrado" });
     }
 
-    const { stdout, stderr } = await exec(
-      `bash "${script}" "${basePath}"`
-    );
+    const { stdout, stderr } = await exec(`bash "${script}" "${basePath}"`);
     console.log("Server backup stdout:", stdout);
     if (stderr) console.error("Server backup stderr:", stderr);
 
@@ -392,12 +380,16 @@ exports.restoreBackup = async (req, res) => {
     console.log("[restoreBackup] stdout:", stdout.trim() || "(sin salida)");
     if (stderr) console.error("[restoreBackup] stderr:", stderr.trim());
 
-    console.log("[restoreBackup] ¡Script de restauración finalizado con éxito!");
+    console.log(
+      "[restoreBackup] ¡Script de restauración finalizado con éxito!"
+    );
     return res.json({ message: `Backup restored: ${filename}` });
   } catch (error) {
     console.error("[restoreBackup] ERROR en la ejecución:", error);
-    if (error.stdout) console.error("[restoreBackup] error.stdout:", error.stdout);
-    if (error.stderr) console.error("[restoreBackup] error.stderr:", error.stderr);
+    if (error.stdout)
+      console.error("[restoreBackup] error.stdout:", error.stdout);
+    if (error.stderr)
+      console.error("[restoreBackup] error.stderr:", error.stderr);
 
     const detail = error.stderr || error.message;
     return res
@@ -405,8 +397,6 @@ exports.restoreBackup = async (req, res) => {
       .json({ error: `Failed to restore backup: ${detail}` });
   }
 };
-
-
 
 // POST /api/server/save-messages
 exports.saveMessages = async (req, res) => {
@@ -484,9 +474,7 @@ exports.stop = async (req, res) => {
           clearInterval(interval);
           // Enviar stop a todas
           sessions.forEach((ses) => {
-            cp.exec(
-              `screen -S ${ses} -p 0 -X stuff "stop$(printf '\\r')"`
-            );
+            cp.exec(`screen -S ${ses} -p 0 -X stuff "stop$(printf '\\r')"`);
           });
           // Pequeña espera para asegurarnos de que termine
           setTimeout(resolve, 1000);
@@ -500,4 +488,3 @@ exports.stop = async (req, res) => {
     return res.status(500).json({ error: "Failed to stop server" });
   }
 };
-
