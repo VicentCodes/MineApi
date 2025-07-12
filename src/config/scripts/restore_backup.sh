@@ -14,26 +14,25 @@ fi
 WORLD_DIR="$DEST_BASE/worlds"
 TARGET="$WORLD_DIR/$WORLD_NAME"
 
-# 1) Notificar al servidor y pararlo
+# 1) Notificar y parar el servidor
 screen -S minecraft_server -p 0 -X stuff "say Restaurando copia de seguridad...$(printf \\r)" 2>/dev/null || true
 screen -S minecraft_server -p 0 -X stuff "save-off$(printf \\r)"                             2>/dev/null || true
 screen -S minecraft_server -p 0 -X stuff "stop$(printf \\r)"                                 2>/dev/null || true
-sleep 5
+sleep 5  # espera a que se apague
 
-# 2) Renombrar el mundo existente (si lo hay) antes de restaurar
+# 2) Borrar el mundo antiguo
 if [ -d "$TARGET" ]; then
-  mv "$TARGET" "${TARGET}_backup_$(date +%s)"
+  rm -rf "$TARGET"
 fi
 
-# 3) Asegurar que exista la carpeta worlds
+# 3) Asegurar el directorio worlds/
 mkdir -p "$WORLD_DIR"
 
-# 4) Descomprimir el zip dentro de worlds/
-#    (el .zip contiene una carpeta con el nombre del mundo)
+# 4) Descomprimir solo la carpeta del mundo dentro de worlds/
+#    (el ZIP debe contener una carpeta llamada EXACTAMENTE $WORLD_NAME)
 unzip -o "$ZIP_FILE" -d "$WORLD_DIR"
 
 # 5) Arrancar de nuevo el servidor
 screen -dmS minecraft_server bash -c "cd $DEST_BASE && LD_LIBRARY_PATH=. ./bedrock_server"
 
-# 6) Mensaje de confirmación
-echo "Copia restaurada desde $ZIP_FILE en $TARGET"
+echo "✔ Mundo '$WORLD_NAME' restaurado desde $ZIP_FILE"

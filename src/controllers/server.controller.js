@@ -290,14 +290,15 @@ exports.backupToggle = async (req, res) => {
   }
 };
 
+
 exports.restoreBackup = async (req, res) => {
   try {
     const { filename } = req.body;
     if (!filename)
       return res.status(400).json({ error: "filename is required" });
 
-    const basePath = getMinecraftPath();
-    const cfg = _readConfig();
+    const basePath    = getMinecraftPath();
+    const cfg         = _readConfig();
     const activeWorld = cfg.state?.activeWorld;
     if (!activeWorld)
       return res
@@ -318,8 +319,9 @@ exports.restoreBackup = async (req, res) => {
     if (!fs.existsSync(script))
       return res.status(500).json({ error: "Restore script not found" });
 
-    // <-- aquí pasamos el tercer parámetro
-    await execFile(script, [backupPath, basePath, activeWorld]);
+-   await execFile(script, [backupPath, basePath, activeWorld]);
++   // Llamamos al script que ya apaga, restaura y enciende el server
++   await execFile(script, [backupPath, basePath, activeWorld]);
 
     return res.json({ message: `Backup restored: ${filename}` });
   } catch (error) {
@@ -330,6 +332,7 @@ exports.restoreBackup = async (req, res) => {
       .json({ error: `Failed to restore backup: ${detail}` });
   }
 };
+
 
 
 
