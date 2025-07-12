@@ -340,10 +340,8 @@ exports.restoreBackup = async (req, res) => {
 
     console.log("[restoreBackup] ¡Script de restauración finalizado con éxito!");
     return res.json({ message: `Backup restored: ${filename}` });
-
   } catch (error) {
     console.error("[restoreBackup] ERROR en la ejecución:", error);
-    // Si es un error de exec, quizá tenga stdout/stderr
     if (error.stdout) console.error("[restoreBackup] error.stdout:", error.stdout);
     if (error.stderr) console.error("[restoreBackup] error.stderr:", error.stderr);
 
@@ -353,6 +351,7 @@ exports.restoreBackup = async (req, res) => {
       .json({ error: `Failed to restore backup: ${detail}` });
   }
 };
+
 
 
 // POST /api/server/save-messages
