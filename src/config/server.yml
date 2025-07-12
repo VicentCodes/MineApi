@@ -1,10 +1,10 @@
 paths:
   api_server: /Users/vicentcodes/VSC/MineApi/src/config
-  minecraft_server: /home/minecraft/bedrock-server
+  minecraft_server: /home/mainserver/minecraft/bedrock-server
 messages:
   welcome: ''
   news: ''
   farewell: ''
 state:
-  activeWorld: ''
+  activeWorld: Bedrock level
 

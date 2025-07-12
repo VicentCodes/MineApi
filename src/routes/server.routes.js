@@ -1,7 +1,6 @@
 const router = require("express").Router();
 const ctrl = require("../controllers/server.controller");
 
-router.get("/path", ctrl.getPath);
 router.post("/path", ctrl.setPath);
 router.get("/", ctrl.getInfo);
 router.get("/status", ctrl.status);

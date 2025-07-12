@@ -39,15 +39,16 @@ exports.getInfo = async (req, res) => {
     const worldsBase = path.join(basePath, "backups", "worlds");
     if (fs.existsSync(worldsBase)) {
       fs.readdirSync(worldsBase, { withFileTypes: true })
-        .filter(d => d.isDirectory())
-        .map(d => d.name)
-        .forEach(world => {
+        .filter((d) => d.isDirectory())
+        .map((d) => d.name)
+        .forEach((world) => {
           const dir = path.join(worldsBase, world);
-          const files = fs.readdirSync(dir)
-            .filter(f => f.endsWith(".zip"))
-            .map(file => ({
+          const files = fs
+            .readdirSync(dir)
+            .filter((f) => f.endsWith(".zip"))
+            .map((file) => ({
               filename: file,
-              label: humanizeBackupName(file)
+              label: humanizeBackupName(file),
             }));
           worldBackups[world] = files;
         });
@@ -57,11 +58,12 @@ exports.getInfo = async (req, res) => {
     let serverBackups = [];
     const serverDir = path.join(basePath, "backups", "server");
     if (fs.existsSync(serverDir)) {
-      serverBackups = fs.readdirSync(serverDir)
-        .filter(f => f.endsWith(".zip"))
-        .map(file => ({
+      serverBackups = fs
+        .readdirSync(serverDir)
+        .filter((f) => f.endsWith(".zip"))
+        .map((file) => ({
           filename: file,
-          label: humanizeBackupName(file)
+          label: humanizeBackupName(file),
         }));
     }
 
@@ -74,7 +76,7 @@ exports.getInfo = async (req, res) => {
     try {
       const script = scriptPath("backup_manual.sh");
       const { stdout } = await exec("crontab -l");
-      const line = stdout.split("\n").find(l => l.includes(script));
+      const line = stdout.split("\n").find((l) => l.includes(script));
       if (line) {
         cronActive = true;
         const m = line.match(/^0 \*\/(\d+) /);
@@ -89,13 +91,13 @@ exports.getInfo = async (req, res) => {
       activeWorld,
       paths: {
         minecraft: basePath,
-        admin: adminPath
+        admin: adminPath,
       },
       worldBackups,
       serverBackups,
       serverRunning,
       cronActive,
-      intervalHours
+      intervalHours,
     });
   } catch (error) {
     console.error("getInfo error:", error);
@@ -129,16 +131,7 @@ exports.status = async (req, res) => {
   }
 };
 
-// GET /api/server/path
-exports.getPath = async (req, res) => {
-  try {
-    const serverPath = getMinecraftPath();
-    return res.json({ path: serverPath });
-  } catch (error) {
-    console.error("getPath error:", error);
-    return res.status(500).json({ error: "Could not retrieve Minecraft path" });
-  }
-};
+
 
 // POST /api/server/path
 exports.setPath = async (req, res) => {
@@ -204,34 +197,6 @@ exports.restart = async (req, res) => {
     return res.status(500).json({ error: "Failed to restart server" });
   }
 };
-
-// // POST /api/server/backup
-// exports.backup = async (req, res) => {
-//   try {
-//     const basePath = getMinecraftPath();
-//     const cfg = _readConfig();
-//     const activeWorld = cfg.state?.activeWorld || "bedrock_server";
-//     const script = scriptPath("backup_manual.sh");
-
-//     if (!fs.existsSync(script)) {
-//       console.error("backup script not found:", script);
-//       return res.status(500).json({ error: "Backup script not found" });
-//     }
-
-//     const { stdout, stderr } = await exec(
-//       `bash "${script}" "${basePath}" "${activeWorld}"`
-//     );
-//     console.log("Backup stdout:", stdout);
-//     if (stderr) console.error("Backup stderr:", stderr);
-
-//     return res.json({ message: "Backup started", world: activeWorld });
-//   } catch (error) {
-//     console.error("backup error:", error);
-//     return res
-//       .status(500)
-//       .json({ error: `Failed to start backup: ${error.message}` });
-//   }
-// };
 
 // POST /api/server/backup/world
 exports.backupWorld = async (req, res) => {
