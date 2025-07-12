@@ -388,33 +388,62 @@ exports.start = async (req, res) => {
 // POST /api/server/stop
 exports.stop = async (req, res) => {
   try {
+    const exec = util.promisify(cp.exec);
+
+    // 1) Obtener lista de sesiones activas (*.minecraft_server)
+    const { stdout: list } = await exec(
+      `screen -ls | grep '\\.minecraft_server' | awk '{print $1}'`
+    );
+    const sessions = list
+      .split("\n")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+
+    if (sessions.length === 0) {
+      console.warn("stop: no hay sesiones de minecraft_server activas");
+      return res
+        .status(400)
+        .json({ error: "No active minecraft_server sessions found" });
+    }
+
+    // 2) Promise con countdown y stop
     await new Promise((resolve, reject) => {
       let seconds = 10;
+
       const interval = setInterval(() => {
-        const msg =
+        // Construir mensaje y enviarlo a cada sesión
+        const text =
           seconds === 0
             ? "⛔ Shutting down now..."
             : seconds === 1
             ? `⚠ Shutting down in ${seconds} second...`
             : `⚠ Shutting down in ${seconds} seconds...`;
-        cp.exec(
-          `screen -S minecraft_server -p 0 -X stuff "say ${msg}$(printf '')"`,
-          (err) => {
-            if (err) console.error("shutdown message error:", err);
-          }
-        );
+
+        sessions.forEach((ses) => {
+          // IMPORTANT: añadimos \r al final para que Screen ejecute el comando
+          cp.exec(
+            `screen -S ${ses} -p 0 -X stuff "say ${text}$(printf '\\r')"`
+          );
+        });
+
         if (seconds-- === 0) {
           clearInterval(interval);
-          cp.exec(
-            `screen -S minecraft_server -p 0 -X stuff "stop$(printf '')"`,
-            (err) => (err ? reject(err) : resolve())
-          );
+          // Enviar stop a todas
+          sessions.forEach((ses) => {
+            cp.exec(
+              `screen -S ${ses} -p 0 -X stuff "stop$(printf '\\r')"`
+            );
+          });
+          // Pequeña espera para asegurarnos de que termine
+          setTimeout(resolve, 1000);
         }
       }, 1000);
     });
+
     return res.json({ message: "Server stopped" });
   } catch (error) {
     console.error("stop error:", error);
     return res.status(500).json({ error: "Failed to stop server" });
   }
 };
+
