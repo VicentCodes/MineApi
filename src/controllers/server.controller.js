@@ -20,11 +20,9 @@ const {
   setLastStoppedTime,
   clearLastStoppedTime,
   restartServer,
-  getCronLine,
 } = require("../services/mc.service");
 
 const exec = util.promisify(cp.exec);
-const execFile = util.promisify(cp.execFile);
 
 function scriptPath(scriptName) {
   return path.join(admin_base_path, "scripts", scriptName);
@@ -91,7 +89,6 @@ exports.getInfo = async (req, res) => {
 
       if (lines.length > 0) {
         cronActive = true;
-        // extract interval: look for "0 */<n> "
         const m = lines[0].match(/^0 \*\/(\d+) /);
         if (m) {
           intervalHours = parseInt(m[1], 10);
@@ -290,15 +287,15 @@ exports.backupToggle = async (req, res) => {
   }
 };
 
-
+// POST /api/server/restore
 exports.restoreBackup = async (req, res) => {
   try {
     const { filename } = req.body;
     if (!filename)
       return res.status(400).json({ error: "filename is required" });
 
-    const basePath    = getMinecraftPath();
-    const cfg         = _readConfig();
+    const basePath = getMinecraftPath();
+    const cfg = _readConfig();
     const activeWorld = cfg.state?.activeWorld;
     if (!activeWorld)
       return res
@@ -319,9 +316,12 @@ exports.restoreBackup = async (req, res) => {
     if (!fs.existsSync(script))
       return res.status(500).json({ error: "Restore script not found" });
 
--   await execFile(script, [backupPath, basePath, activeWorld]);
-+   // Llamamos al script que ya apaga, restaura y enciende el server
-+   await execFile(script, [backupPath, basePath, activeWorld]);
+    // Ejecutamos el script siempre con bash para asegurar diagnóstico
+    const { stdout, stderr } = await exec(
+      `bash "${script}" "${backupPath}" "${basePath}" "${activeWorld}"`
+    );
+    console.log("restore stdout:", stdout);
+    if (stderr) console.error("restore stderr:", stderr);
 
     return res.json({ message: `Backup restored: ${filename}` });
   } catch (error) {
@@ -332,9 +332,6 @@ exports.restoreBackup = async (req, res) => {
       .json({ error: `Failed to restore backup: ${detail}` });
   }
 };
-
-
-
 
 // POST /api/server/save-messages
 exports.saveMessages = async (req, res) => {
@@ -400,4 +397,3 @@ exports.stop = async (req, res) => {
     return res.status(500).json({ error: "Failed to stop server" });
   }
 };
-
