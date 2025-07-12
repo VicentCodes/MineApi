@@ -215,31 +215,85 @@ exports.restart = async (req, res) => {
   }
 };
 
-// POST /api/server/backup
-exports.backup = async (req, res) => {
+// // POST /api/server/backup
+// exports.backup = async (req, res) => {
+//   try {
+//     const basePath = getMinecraftPath();
+//     const cfg = _readConfig();
+//     const activeWorld = cfg.state?.activeWorld || "bedrock_server";
+//     const script = scriptPath("backup_manual.sh");
+
+//     if (!fs.existsSync(script)) {
+//       console.error("backup script not found:", script);
+//       return res.status(500).json({ error: "Backup script not found" });
+//     }
+
+//     const { stdout, stderr } = await exec(
+//       `bash "${script}" "${basePath}" "${activeWorld}"`
+//     );
+//     console.log("Backup stdout:", stdout);
+//     if (stderr) console.error("Backup stderr:", stderr);
+
+//     return res.json({ message: "Backup started", world: activeWorld });
+//   } catch (error) {
+//     console.error("backup error:", error);
+//     return res
+//       .status(500)
+//       .json({ error: `Failed to start backup: ${error.message}` });
+//   }
+// };
+
+// POST /api/server/backup/world
+exports.backupWorld = async (req, res) => {
   try {
     const basePath = getMinecraftPath();
     const cfg = _readConfig();
     const activeWorld = cfg.state?.activeWorld || "bedrock_server";
-    const script = scriptPath("backup_manual.sh");
+    const script = scriptPath("backup_world.sh");
 
     if (!fs.existsSync(script)) {
-      console.error("backup script not found:", script);
-      return res.status(500).json({ error: "Backup script not found" });
+      console.error("backup_world script not found:", script);
+      return res.status(500).json({ error: "Script de backup de mundo no encontrado" });
     }
 
     const { stdout, stderr } = await exec(
       `bash "${script}" "${basePath}" "${activeWorld}"`
     );
-    console.log("Backup stdout:", stdout);
-    if (stderr) console.error("Backup stderr:", stderr);
+    console.log("World backup stdout:", stdout);
+    if (stderr) console.error("World backup stderr:", stderr);
 
-    return res.json({ message: "Backup started", world: activeWorld });
+    return res.json({ message: "World backup iniciado", world: activeWorld });
   } catch (error) {
-    console.error("backup error:", error);
+    console.error("backupWorld error:", error);
     return res
       .status(500)
-      .json({ error: `Failed to start backup: ${error.message}` });
+      .json({ error: `Fallo al iniciar backup de mundo: ${error.message}` });
+  }
+};
+
+// POST /api/server/backup/config
+exports.backupConfig = async (req, res) => {
+  try {
+    const basePath = getMinecraftPath();
+    const script = scriptPath("backup_server.sh");
+
+    if (!fs.existsSync(script)) {
+      console.error("backup_server script not found:", script);
+      return res.status(500).json({ error: "Script de backup de servidor no encontrado" });
+    }
+
+    const { stdout, stderr } = await exec(
+      `bash "${script}" "${basePath}"`
+    );
+    console.log("Server backup stdout:", stdout);
+    if (stderr) console.error("Server backup stderr:", stderr);
+
+    return res.json({ message: "Server backup iniciado" });
+  } catch (error) {
+    console.error("backupConfig error:", error);
+    return res
+      .status(500)
+      .json({ error: `Fallo al iniciar backup de servidor: ${error.message}` });
   }
 };
 

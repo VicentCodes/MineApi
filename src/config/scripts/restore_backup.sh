@@ -6,57 +6,57 @@ ZIP_FILE="$1"
 DEST_BASE="$2"
 WORLD_NAME="$3"
 
-# Función para enviar mensajes al servidor
-avisar() {
+# Function to send messages to the Minecraft server
+notify_server() {
   local MSG="$1"
   for SES in "${SESSIONS[@]}"; do
     screen -S "$SES" -p 0 -X stuff "say ${MSG}$(printf \\r)" 2>/dev/null || true
   done
 }
 
-echo "✔ [restore] Iniciando restauración de '$WORLD_NAME' desde '$ZIP_FILE'"
+echo "✔ [restore] Starting restoration of world '$WORLD_NAME' from '$ZIP_FILE'"
 
-# Validar argumentos
+# Validate arguments
 if [ -z "$ZIP_FILE" ] || [ -z "$DEST_BASE" ] || [ -z "$WORLD_NAME" ]; then
-  echo "✖ [restore] Uso: $0 <zip_file> <destination_base_path> <world_name>"
+  echo "✖ [restore] Usage: $0 <zip_file> <destination_base_path> <world_name>"
   exit 1
 fi
 
 WORLD_DIR="$DEST_BASE/worlds"
 TARGET="$WORLD_DIR/$WORLD_NAME"
 
-# 1) Listar sesiones antes
-echo "ℹ [restore] screen -ls (antes de stop):"
+# 1) List sessions before stopping
+echo "ℹ [restore] screen -ls (before stop):"
 screen -ls
 
-# 2) Recoger todas las sesiones 'minecraft_server'
+# 2) Gather all 'minecraft_server' sessions
 mapfile -t SESSIONS < <(screen -ls | awk '/\.minecraft_server/ {print $1}')
 if [ ${#SESSIONS[@]} -eq 0 ]; then
-  echo "⚠ [restore] No se encontraron sesiones activas de screen 'minecraft_server'"
+  echo "⚠ [restore] No active 'minecraft_server' screen sessions found"
 else
-  echo "✔ [restore] Se detectaron ${#SESSIONS[@]} sesiones."
-  
-  # Countdown de 10 segundos
+  echo "✔ [restore] Detected ${#SESSIONS[@]} session(s)."
+
+  # 10-second countdown with in-game warnings
   for i in $(seq 10 -1 1); do
-    avisar "⚠ Restauración en curso: detención del servidor en ${i} segundos..."
+    notify_server "⚠ Restoration in progress: server shutting down in ${i} second(s)..."
     sleep 1
   done
 
-  avisar "⛔ Deteniendo servidor para restauración..."
-  avisar "save-off"
+  notify_server "⛔ Shutting down server for restoration..."
+  notify_server "save-off"
 
-  # Enviar stop
+  # Send stop command to each session
   for SES in "${SESSIONS[@]}"; do
     screen -S "$SES" -p 0 -X stuff "stop$(printf \\r)" 2>/dev/null || true
   done
 fi
 
-# 3) Esperar a que mueran
+# 3) Wait for sessions to end
 sleep 8
 
-# 4) Fuerza cierre de sesiones que persistan
+# 4) Force-quit any lingering sessions
 if [ ${#SESSIONS[@]} -gt 0 ]; then
-  echo "ℹ [restore] Forzando quit en sesiones restantes:"
+  echo "ℹ [restore] Forcing quit on remaining sessions:"
   for SES in "${SESSIONS[@]}"; do
     echo "ℹ [restore] -> quit $SES"
     screen -S "$SES" -X quit 2>/dev/null || true
@@ -64,44 +64,44 @@ if [ ${#SESSIONS[@]} -gt 0 ]; then
   screen -wipe >/dev/null 2>&1
 fi
 
-# 5) Estado tras stop
-echo "ℹ [restore] screen -ls (después de stop):"
+# 5) Status after stop
+echo "ℹ [restore] screen -ls (after stop):"
 screen -ls
-echo "ℹ [restore] ps aux | grep bedrock_server (después de stop):"
-ps aux | grep bedrock_server | grep -v grep || echo "→ No hay proceso bedrock_server"
+echo "ℹ [restore] ps aux | grep bedrock_server (after stop):"
+ps aux | grep bedrock_server | grep -v grep || echo "→ No bedrock_server process running"
 
-# 6) Borrar el mundo antiguo
+# 6) Remove old world directory
 if [ -d "$TARGET" ]; then
-  echo "✔ [restore] Borrando directorio viejo: $TARGET"
+  echo "✔ [restore] Removing old world directory: $TARGET"
   rm -rf "$TARGET"
 else
-  echo "⚠ [restore] No existía el directorio: $TARGET"
+  echo "⚠ [restore] World directory not found: $TARGET"
 fi
 
-# 7) Asegurar directorio worlds/
+# 7) Ensure worlds directory exists
 mkdir -p "$WORLD_DIR"
 
-# 8) Mostrar contenido del ZIP
-echo "ℹ [restore] Contenido de '$ZIP_FILE':"
+# 8) List ZIP contents
+echo "ℹ [restore] Contents of '$ZIP_FILE':"
 unzip -l "$ZIP_FILE"
 
-# 9) Descomprimir mundo
-echo "✔ [restore] Descomprimiendo '$ZIP_FILE' en '$WORLD_DIR'"
+# 9) Extract world
+echo "✔ [restore] Extracting '$ZIP_FILE' into '$WORLD_DIR'"
 unzip -o "$ZIP_FILE" -d "$WORLD_DIR"
 
-# 10) Listar sesiones antes de arrancar
-echo "ℹ [restore] screen -ls (antes de start):"
+# 10) Sessions before restart
+echo "ℹ [restore] screen -ls (before start):"
 screen -ls
 
-# 11) Arrancar servidor
-echo "✔ [restore] Iniciando servidor..."
+# 11) Start the server
+echo "✔ [restore] Starting server..."
 screen -dmS minecraft_server bash -c "cd $DEST_BASE && LD_LIBRARY_PATH=. ./bedrock_server"
 
-# 12) Espera y refresco
+# 12) Brief wait and final status
 sleep 3
-echo "ℹ [restore] screen -ls (después de start):"
+echo "ℹ [restore] screen -ls (after start):"
 screen -ls
-echo "ℹ [restore] ps aux | grep bedrock_server (después de start):"
-ps aux | grep bedrock_server | grep -v grep || echo "→ bedrock_server no arrancó"
+echo "ℹ [restore] ps aux | grep bedrock_server (after start):"
+ps aux | grep bedrock_server | grep -v grep || echo "→ bedrock_server did not start"
 
-echo "✔ [restore] Mundo '$WORLD_NAME' restaurado correctamente."
+echo "✔ [restore] World '$WORLD_NAME' restored successfully."

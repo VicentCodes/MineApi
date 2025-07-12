@@ -1,46 +1,48 @@
 #!/bin/bash
 
 SERVER_SCREEN="minecraft_server"
-MINUTOS=${1:-10}  # Por defecto 10 minutos si no se pasa argumento
+MINUTES=${1:-10}  # Default to 10 minutes if no argument is passed
 
-screen -d "$SERVER_SCREEN"
-
-avisar() {
+# Function to send messages to the Minecraft server
+notify() {
   screen -S "$SERVER_SCREEN" -p 0 -X stuff "say $1$(printf \\r)"
 }
 
-if [ "$MINUTOS" -eq 10 ]; then
-  avisar "El servidor se apagará en 10 minutos."
+# Countdown warnings based on the chosen delay
+if [ "$MINUTES" -eq 10 ]; then
+  notify "Server will shut down in 10 minutes."
   sleep 300
-  avisar "El servidor se apagará en 5 minutos."
+  notify "Server will shut down in 5 minutes."
   sleep 240
-  avisar "El servidor se apagará en 1 minuto."
+  notify "Server will shut down in 1 minute."
   sleep 30
-  avisar "El servidor se apagará en 30 segundos."
+  notify "Server will shut down in 30 seconds."
   sleep 20
-elif [ "$MINUTOS" -eq 5 ]; then
-  avisar "El servidor se apagará en 5 minutos."
+elif [ "$MINUTES" -eq 5 ]; then
+  notify "Server will shut down in 5 minutes."
   sleep 240
-  avisar "El servidor se apagará en 1 minuto."
+  notify "Server will shut down in 1 minute."
   sleep 30
-  avisar "El servidor se apagará en 30 segundos."
+  notify "Server will shut down in 30 seconds."
   sleep 20
-elif [ "$MINUTOS" -eq 2 ]; then
-  avisar "El servidor se apagará en 2 minutos."
+elif [ "$MINUTES" -eq 2 ]; then
+  notify "Server will shut down in 2 minutes."
   sleep 60
-  avisar "El servidor se apagará en 1 minuto."
+  notify "Server will shut down in 1 minute."
   sleep 30
-  avisar "El servidor se apagará en 30 segundos."
+  notify "Server will shut down in 30 seconds."
   sleep 20
 else
-  avisar "Apagando en 10 segundos..."
+  notify "Shutting down in 10 seconds..."
 fi
 
+# Final 10-second countdown
 for i in {9..1}; do
   sleep 1
-  avisar "Apagando en $i..."
+  notify "Shutting down in $i..."
 done
 
-avisar "Apagando servidor ahora."
+# Perform save and stop
+notify "Shutting down now."
 screen -S "$SERVER_SCREEN" -p 0 -X stuff "save-all$(printf \\r)"
 screen -S "$SERVER_SCREEN" -p 0 -X stuff "stop$(printf \\r)"
