@@ -290,7 +290,6 @@ exports.backupToggle = async (req, res) => {
   }
 };
 
-// POST /api/server/restore-backup
 exports.restoreBackup = async (req, res) => {
   try {
     const { filename } = req.body;
@@ -299,7 +298,12 @@ exports.restoreBackup = async (req, res) => {
 
     const basePath = getMinecraftPath();
     const cfg = _readConfig();
-    const activeWorld = cfg.state?.activeWorld || "";
+    const activeWorld = cfg.state?.activeWorld;
+    if (!activeWorld)
+      return res
+        .status(400)
+        .json({ error: "No activeWorld definido en server.yml" });
+
     const backupPath = path.join(
       basePath,
       "backups",
@@ -314,9 +318,8 @@ exports.restoreBackup = async (req, res) => {
     if (!fs.existsSync(script))
       return res.status(500).json({ error: "Restore script not found" });
 
--   await execFile(script, [backupPath, basePath]);
-+   // Pasamos también el nombre del mundo para que el script lo use
-+   await execFile(script, [backupPath, basePath, activeWorld]);
+    // <-- aquí pasamos el tercer parámetro
+    await execFile(script, [backupPath, basePath, activeWorld]);
 
     return res.json({ message: `Backup restored: ${filename}` });
   } catch (error) {
@@ -327,6 +330,7 @@ exports.restoreBackup = async (req, res) => {
       .json({ error: `Failed to restore backup: ${detail}` });
   }
 };
+
 
 
 // POST /api/server/save-messages
