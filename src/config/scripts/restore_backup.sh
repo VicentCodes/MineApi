@@ -17,31 +17,46 @@ fi
 WORLD_DIR="$DEST_BASE/worlds"
 TARGET="$WORLD_DIR/$WORLD_NAME"
 
-# 1) Mostrar sesiones antes de parar
+# 1) Listar sesiones antes
 echo "ℹ [restore] screen -ls (antes de stop):"
 screen -ls
 
-# 2) Encontrar sesión de screen activa
-SESSION=$(screen -ls | awk '/\.minecraft_server/ {print $1; exit}')
-if [ -z "$SESSION" ]; then
-  echo "⚠ [restore] No se encontró sesión activa de screen 'minecraft_server'"
+# 2) Recoger todas las sesiones 'minecraft_server'
+mapfile -t SESSIONS < <(screen -ls | awk '/\.minecraft_server/ {print $1}')
+if [ ${#SESSIONS[@]} -eq 0 ]; then
+  echo "⚠ [restore] No se encontraron sesiones activas de screen 'minecraft_server'"
 else
-  echo "✔ [restore] Parando sesión: $SESSION"
-  screen -S "$SESSION" -X stuff "say Restaurando copia de seguridad...$(printf \\r)" 2>/dev/null || true
-  screen -S "$SESSION" -X stuff "save-off$(printf \\r)"                             2>/dev/null || true
-  screen -S "$SESSION" -X stuff "stop$(printf \\r)"                                 2>/dev/null || true
+  echo "✔ [restore] Se detectaron ${#SESSIONS[@]} sesiones. Enviando 'stop' a todas:"
+  for SES in "${SESSIONS[@]}"; do
+    echo "ℹ [restore] -> Parando sesión $SES"
+    screen -S "$SES" -p 0 -X stuff "say Restaurando copia...$(printf \\r)" 2>/dev/null || true
+    screen -S "$SES" -p 0 -X stuff "save-off$(printf \\r)"              2>/dev/null || true
+    screen -S "$SES" -p 0 -X stuff "stop$(printf \\r)"                  2>/dev/null || true
+  done
 fi
 
-# 3) Esperar y luego mostrar sesiones tras el stop
-sleep 5
+# 3) Esperar a que mueran
+sleep 8
+
+# 4) Fuerza cierre de sesiones que persistan
+if [ ${#SESSIONS[@]} -gt 0 ]; then
+  echo "ℹ [restore] Forzando quit en sesiones restantes:"
+  for SES in "${SESSIONS[@]}"; do
+    echo "ℹ [restore] -> quit $SES"
+    screen -S "$SES" -X quit 2>/dev/null || true
+  done
+  # Limpia sockets huérfanos
+  screen -wipe >/dev/null 2>&1
+fi
+
+# 5) Mostrar estado tras stop
 echo "ℹ [restore] screen -ls (después de stop):"
 screen -ls
 
-# 4) Verificar proceso bedrock_server todavía vivo
 echo "ℹ [restore] ps aux | grep bedrock_server (después de stop):"
-ps aux | grep bedrock_server | grep -v grep
+ps aux | grep bedrock_server | grep -v grep || echo "→ No hay proceso bedrock_server"
 
-# 5) Borrar el mundo antiguo
+# 6) Borrar el mundo antiguo
 if [ -d "$TARGET" ]; then
   echo "✔ [restore] Borrando directorio viejo: $TARGET"
   rm -rf "$TARGET"
@@ -49,32 +64,31 @@ else
   echo "⚠ [restore] No existía el directorio: $TARGET"
 fi
 
-# 6) Asegurar el directorio worlds/
+# 7) Asegurar directorio worlds/
 mkdir -p "$WORLD_DIR"
 
-# 7) Mostrar contenido del ZIP antes de descomprimir
+# 8) Mostrar contenido del ZIP
 echo "ℹ [restore] Contenido de '$ZIP_FILE':"
 unzip -l "$ZIP_FILE"
 
-# 8) Descomprimir sólo la carpeta del mundo dentro de worlds/
+# 9) Descomprimir mundo
 echo "✔ [restore] Descomprimiendo '$ZIP_FILE' en '$WORLD_DIR'"
 unzip -o "$ZIP_FILE" -d "$WORLD_DIR"
 
-# 9) Mostrar sesiones antes de arrancar de nuevo
+# 10) Listar sesiones antes de arrancar
 echo "ℹ [restore] screen -ls (antes de start):"
 screen -ls
 
-# 10) Arrancar de nuevo el servidor
+# 11) Arrancar servidor
 echo "✔ [restore] Iniciando servidor..."
 screen -dmS minecraft_server bash -c "cd $DEST_BASE && LD_LIBRARY_PATH=. ./bedrock_server"
 
-# 11) Esperar un momento y mostrar sesiones tras el start
+# 12) Pequeña espera y refresco de sesiones
 sleep 3
 echo "ℹ [restore] screen -ls (después de start):"
 screen -ls
 
-# 12) Verificar proceso bedrock_server arrancado
 echo "ℹ [restore] ps aux | grep bedrock_server (después de start):"
-ps aux | grep bedrock_server | grep -v grep
+ps aux | grep bedrock_server | grep -v grep || echo "→ bedrock_server no arrancó"
 
 echo "✔ [restore] Mundo '$WORLD_NAME' restaurado correctamente."
