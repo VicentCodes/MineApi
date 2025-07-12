@@ -31,68 +31,67 @@ function scriptPath(scriptName) {
 // GET /api/server
 exports.getInfo = async (req, res) => {
   try {
-    const cfg = _readConfig();
+    // Load config and state
+    const cfg = require("../config/config").readConfig();
     const messages = cfg.messages || {};
     const activeWorld = cfg.state?.activeWorld || "";
+
     const basePath = getMinecraftPath();
 
-    // World backups organized by world
-    let worldBackups = {};
-    try {
-      const worldsBase = path.join(basePath, "backups", "worlds");
-      const worldDirs = fs.existsSync(worldsBase)
-        ? fs
-            .readdirSync(worldsBase, { withFileTypes: true })
-            .filter((d) => d.isDirectory())
-            .map((d) => d.name)
-        : [];
+    // World backups
+    const worldBackups = {};
+    const worldsBase = path.join(basePath, "backups", "worlds");
+    if (fs.existsSync(worldsBase)) {
+      const worldDirs = fs
+        .readdirSync(worldsBase, { withFileTypes: true })
+        .filter((d) => d.isDirectory())
+        .map((d) => d.name);
 
       worldDirs.forEach((world) => {
         const dir = path.join(worldsBase, world);
         const files = fs
           .readdirSync(dir)
           .filter((f) => f.endsWith(".zip"))
-          .map((file) => ({ filename: file, label: file }));
+          .map((file) => ({
+            filename: file,
+            label: humanizeBackupName(file),
+          }));
         worldBackups[world] = files;
       });
-    } catch (err) {
-      console.error("getInfo worldBackups error:", err);
     }
 
     // Server backups
     let serverBackups = [];
-    try {
-      const serverDir = path.join(basePath, "backups", "server");
-      serverBackups = fs.existsSync(serverDir)
-        ? fs
-            .readdirSync(serverDir)
-            .filter((f) => f.endsWith(".zip"))
-            .map((file) => ({ filename: file, label: file }))
-        : [];
-    } catch (err) {
-      console.error("getInfo serverBackups error:", err);
+    const serverDir = path.join(basePath, "backups", "server");
+    if (fs.existsSync(serverDir)) {
+      serverBackups = fs
+        .readdirSync(serverDir)
+        .filter((f) => f.endsWith(".zip"))
+        .map((file) => ({
+          filename: file,
+          label: humanizeBackupName(file),
+        }));
     }
 
     // Server running status
     const serverRunning = isServerRunning();
 
-    // Detect backup cron job
+    // Detect cron job for backups
     let cronActive = false;
     let intervalHours = null;
     try {
-      const script = scriptPath("backup_manual.sh");
+      const scriptPath = path.join(
+        __dirname,
+        "..",
+        "scripts",
+        "backup_manual.sh"
+      );
       const { stdout } = await exec("crontab -l");
-      const lines = stdout
-        .split("\n")
-        .map((l) => l.trim())
-        .filter((l) => l && l.includes(script));
-
-      if (lines.length > 0) {
+      const line = stdout.split("\n").find((l) => l.includes(scriptPath));
+      if (line) {
         cronActive = true;
-        const m = lines[0].match(/^0 \*\/(\d+) /);
-        if (m) {
-          intervalHours = parseInt(m[1], 10);
-        }
+        const m = line.match(/^0 \*\/(\d+) /);
+        if (m) intervalHours = parseInt(m[1], 10);
       }
     } catch {
       cronActive = false;

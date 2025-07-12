@@ -73,12 +73,14 @@ function getLastStoppedTime() {
   const file = getLastStoppedFilePath();
   return fs.existsSync(file) ? fs.readFileSync(file, "utf8") : null;
 }
+
 function setLastStoppedTime() {
   const file = getLastStoppedFilePath();
   const dir = path.dirname(file);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(file, new Date().toISOString());
 }
+
 function clearLastStoppedTime() {
   const file = getLastStoppedFilePath();
   if (fs.existsSync(file)) fs.unlinkSync(file);
@@ -90,6 +92,27 @@ function getCronLine() {
   return `0 */4 * * * bash ${script} "${getMinecraftPath()}"`;
 }
 
+// Generate a human-readable label from a backup filename like "world-20250712T153045.zip"
+function humanizeBackupName(filename) {
+  const name = path.parse(filename).name;
+  const m = name.match(/(\d{4})(\d{2})(\d{2})T?(\d{2})(\d{2})(\d{2})/);
+  if (m) {
+    const [, yyyy, mm, dd, hh, min, ss] = m;
+    const date = new Date(`${yyyy}-${mm}-${dd}T${hh}:${min}:${ss}Z`);
+    // Format in Spanish locale; adjust locale if needed
+    return date.toLocaleString("es-ES", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+  }
+  // Fallback: replace underscores/hyphens with spaces
+  return name.replace(/[_-]/g, " ");
+}
+
 module.exports = {
   restartServer,
   isServerRunning,
@@ -98,4 +121,5 @@ module.exports = {
   setLastStoppedTime,
   clearLastStoppedTime,
   getCronLine,
+  humanizeBackupName,
 };
