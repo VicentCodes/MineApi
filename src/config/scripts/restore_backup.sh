@@ -1,31 +1,39 @@
 #!/bin/bash
+# scripts/restore_backup.sh
 
-ZIP="$1"
-DESTINO_BASE="$2"
+# Usage: restore_backup.sh <zip_file> <destination_base_path> <world_name>
+ZIP_FILE="$1"
+DEST_BASE="$2"
+WORLD_NAME="$3"
 
-if [ -z "$ZIP" ] || [ -z "$DESTINO_BASE" ]; then
-  echo "Uso: $0 <archivo_zip> <ruta_base_destino>"
+if [ -z "$ZIP_FILE" ] || [ -z "$DEST_BASE" ] || [ -z "$WORLD_NAME" ]; then
+  echo "Usage: $0 <zip_file> <destination_base_path> <world_name>"
   exit 1
 fi
 
-WORLD_DEST="$DESTINO_BASE/worlds"
+WORLD_DIR="$DEST_BASE/worlds"
+TARGET="$WORLD_DIR/$WORLD_NAME"
 
-# Detener el servidor
-screen -S minecraft_server -p 0 -X stuff "say Restaurando backup...$(printf \\r)"
-screen -S minecraft_server -p 0 -X stuff "save-off$(printf \\r)"
-screen -S minecraft_server -p 0 -X stuff "stop$(printf \\r)"
+# 1) Notificar al servidor y pararlo
+screen -S minecraft_server -p 0 -X stuff "say Restaurando copia de seguridad...$(printf \\r)" 2>/dev/null || true
+screen -S minecraft_server -p 0 -X stuff "save-off$(printf \\r)"                             2>/dev/null || true
+screen -S minecraft_server -p 0 -X stuff "stop$(printf \\r)"                                 2>/dev/null || true
 sleep 5
 
-# Verificar si la carpeta worlds existe y renombrarla antes de restaurar
-if [ -d "$WORLD_DEST" ]; then
-  mv "$WORLD_DEST" "${WORLD_DEST}_respaldo_$(date +%s)"
+# 2) Renombrar el mundo existente (si lo hay) antes de restaurar
+if [ -d "$TARGET" ]; then
+  mv "$TARGET" "${TARGET}_backup_$(date +%s)"
 fi
 
-# Extraer el zip (asegurándose de que solo la carpeta worlds se restaure)
-unzip -o "$ZIP" -d "$DESTINO_BASE"
+# 3) Asegurar que exista la carpeta worlds
+mkdir -p "$WORLD_DIR"
 
-# Iniciar el servidor después de restaurar
-screen -dmS minecraft_server bash -c "cd $DESTINO_BASE && ./start.sh"
+# 4) Descomprimir el zip dentro de worlds/
+#    (el .zip contiene una carpeta con el nombre del mundo)
+unzip -o "$ZIP_FILE" -d "$WORLD_DIR"
 
-# Confirmación
-echo "Backup restaurado desde $ZIP a $WORLD_DEST"
+# 5) Arrancar de nuevo el servidor
+screen -dmS minecraft_server bash -c "cd $DEST_BASE && LD_LIBRARY_PATH=. ./bedrock_server"
+
+# 6) Mensaje de confirmación
+echo "Copia restaurada desde $ZIP_FILE en $TARGET"

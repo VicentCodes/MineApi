@@ -314,7 +314,10 @@ exports.restoreBackup = async (req, res) => {
     if (!fs.existsSync(script))
       return res.status(500).json({ error: "Restore script not found" });
 
-    await execFile(script, [backupPath, basePath]);
+-   await execFile(script, [backupPath, basePath]);
++   // Pasamos también el nombre del mundo para que el script lo use
++   await execFile(script, [backupPath, basePath, activeWorld]);
+
     return res.json({ message: `Backup restored: ${filename}` });
   } catch (error) {
     console.error("restoreBackup error:", error);
@@ -324,6 +327,7 @@ exports.restoreBackup = async (req, res) => {
       .json({ error: `Failed to restore backup: ${detail}` });
   }
 };
+
 
 // POST /api/server/save-messages
 exports.saveMessages = async (req, res) => {
