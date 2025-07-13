@@ -1,3 +1,4 @@
+// index.js
 const { syncActiveWorld } = require("./src/config/config");
 const http = require("http");
 const app = require("./src/app");
