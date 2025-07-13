@@ -15,6 +15,5 @@ router.post("/backup-toggle", ctrl.backupToggle);
 router.post("/restore-backup", ctrl.restoreBackup);
 router.post("/save-messages", ctrl.saveMessages);
 router.post("/start", ctrl.start);
-router.post("/stop", ctrl.stop);
 
 module.exports = router;

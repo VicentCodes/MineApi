@@ -2,26 +2,23 @@
 
 const fs = require("fs");
 const path = require("path");
-const { execFile, execSync } = require("child_process");
+const { exec, execFile, execSync } = require("child_process");
 const { getMinecraftPath } = require("../config/config");
 
 // Restart server with warnings
-async function restartServer() {
+function execPromise(command) {
   return new Promise((resolve, reject) => {
-    const script = path.join(
-      __dirname,
-      "..",
-      "scripts",
-      "restart_with_warnings.sh"
-    );
-    execFile(script, (err) => {
+    exec(command, (err, stdout, stderr) => {
       if (err) return reject(err);
-      setTimeout(() => {
-        const cmd = `screen -dmS minecraft_server bash -c "cd ${getMinecraftPath()} && LD_LIBRARY_PATH=. ./bedrock_server"`;
-        execFile(cmd, (err2) => (err2 ? reject(err2) : resolve()));
-      }, 10000);
+      resolve(stdout || stderr);
     });
   });
+}
+
+async function restartServer() {
+  const script = path.join(__dirname, "..", "config", "scripts", "restart.sh");
+  const basePath = getMinecraftPath();
+  await execPromise(`bash "${script}" "${basePath}"`);
 }
 
 // Convert "DD-HH:MM:SS" to milliseconds

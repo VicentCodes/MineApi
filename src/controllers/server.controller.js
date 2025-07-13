@@ -4,6 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const util = require("util");
 const cp = require("child_process");
+const { spawn } = require("child_process");
 
 const {
   getMinecraftPath,
@@ -14,6 +15,7 @@ const {
 const {
   isServerRunning,
   humanizeBackupName,
+  restartServer,
 } = require("../services/mc.service");
 
 const exec = util.promisify(cp.exec);
@@ -131,8 +133,6 @@ exports.status = async (req, res) => {
   }
 };
 
-
-
 // POST /api/server/path
 exports.setPath = async (req, res) => {
   try {
@@ -169,22 +169,29 @@ exports.sendMessage = async (req, res) => {
 };
 
 // POST /api/server/shutdown
-exports.shutdown = async (req, res) => {
-  try {
-    const minutes = parseInt(req.body.time, 10);
-    if (![0, 2, 5, 10].includes(minutes))
-      return res.status(400).json({ error: "Invalid shutdown time" });
-    const script = scriptPath("shutdown_with_warnings.sh");
-    if (!fs.existsSync(script))
-      return res.status(500).json({ error: "Shutdown script not found" });
-    await exec(`bash "${script}" ${minutes}`);
-    return res.json({
-      message: `Server will shut down in ${minutes} minute(s)`,
-    });
-  } catch (error) {
-    console.error("shutdown error:", error);
-    return res.status(500).json({ error: "Shutdown command failed" });
+exports.shutdown = (req, res) => {
+  const minutes = parseInt(req.body.time, 10);
+  if (![0, 2, 5, 10].includes(minutes)) {
+    return res.status(400).json({ error: "Invalid shutdown time" });
   }
+
+  const script = scriptPath("shutdown.sh");
+  if (!fs.existsSync(script)) {
+    return res.status(500).json({ error: "Shutdown script not found" });
+  }
+
+  const child = spawn("bash", [script, `${minutes}`], {
+    detached: true,
+    stdio: "ignore",
+  });
+  child.unref(); // allow parent to exit without waiting
+
+  return res.json({
+    message:
+      minutes > 0
+        ? `Server will shut down in ${minutes} minute${minutes > 1 ? "s" : ""}`
+        : "Server shutdown command executed immediately",
+  });
 };
 
 // POST /api/server/restart
@@ -398,62 +405,4 @@ exports.start = async (req, res) => {
   }
 };
 
-// POST /api/server/stop
-exports.stop = async (req, res) => {
-  try {
-    const exec = util.promisify(cp.exec);
 
-    // 1) Obtener lista de sesiones activas (*.minecraft_server)
-    const { stdout: list } = await exec(
-      `screen -ls | grep '\\.minecraft_server' | awk '{print $1}'`
-    );
-    const sessions = list
-      .split("\n")
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-
-    if (sessions.length === 0) {
-      console.warn("stop: no hay sesiones de minecraft_server activas");
-      return res
-        .status(400)
-        .json({ error: "No active minecraft_server sessions found" });
-    }
-
-    // 2) Promise con countdown y stop
-    await new Promise((resolve, reject) => {
-      let seconds = 10;
-
-      const interval = setInterval(() => {
-        // Construir mensaje y enviarlo a cada sesión
-        const text =
-          seconds === 0
-            ? "⛔ Shutting down now..."
-            : seconds === 1
-            ? `⚠ Shutting down in ${seconds} second...`
-            : `⚠ Shutting down in ${seconds} seconds...`;
-
-        sessions.forEach((ses) => {
-          // IMPORTANT: añadimos \r al final para que Screen ejecute el comando
-          cp.exec(
-            `screen -S ${ses} -p 0 -X stuff "say ${text}$(printf '\\r')"`
-          );
-        });
-
-        if (seconds-- === 0) {
-          clearInterval(interval);
-          // Enviar stop a todas
-          sessions.forEach((ses) => {
-            cp.exec(`screen -S ${ses} -p 0 -X stuff "stop$(printf '\\r')"`);
-          });
-          // Pequeña espera para asegurarnos de que termine
-          setTimeout(resolve, 1000);
-        }
-      }, 1000);
-    });
-
-    return res.json({ message: "Server stopped" });
-  } catch (error) {
-    console.error("stop error:", error);
-    return res.status(500).json({ error: "Failed to stop server" });
-  }
-};
