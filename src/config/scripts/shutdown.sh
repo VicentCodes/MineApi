@@ -46,3 +46,9 @@ done
 notify "Shutting down now."
 screen -S "$SERVER_SCREEN" -p 0 -X stuff "save-all$(printf \\r)"
 screen -S "$SERVER_SCREEN" -p 0 -X stuff "stop$(printf \\r)"
+
+#mkdir -p logs
+#./bedrock_server --log-json 2>&1 | tee logs/latest.log
+# chmod +x /home/mainserver/minecraft/bedrock-server/list_players.sh
+# cd /home/mainserver/minecraft/bedrock-server
+#./list_players.sh

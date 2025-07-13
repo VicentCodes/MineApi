@@ -1,5 +1,5 @@
 paths:
-  api_server: /Users/vicentcodes/VSC/MineApi/src/config
+  api_server: /home/mainserver/minecraft/MineApi/src/config
   minecraft_server: /home/mainserver/minecraft/bedrock-server
 messages:
   welcome: ''

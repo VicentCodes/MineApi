@@ -10,6 +10,7 @@ const {
   getMinecraftPath,
   _readConfig,
   admin_base_path,
+  getApiPath,
 } = require("../config/config");
 
 const {
@@ -104,6 +105,37 @@ exports.getInfo = async (req, res) => {
   } catch (error) {
     console.error("getInfo error:", error);
     return res.status(500).json({ error: "Could not retrieve server info" });
+  }
+};
+
+// GET /api/server/list-players
+exports.listPlayers = async (req, res) => {
+  try {
+    console.log(getApiPath());
+    const script = path.join(getApiPath(), "scripts", "list_players.sh");
+    if (!fs.existsSync(script)) {
+      return res
+        .status(500)
+        .json({ error: "Script list_players.sh not found." });
+    }
+
+    const { stdout, stderr } = await exec(`bash "${script}"`);
+    if (stderr) console.error("listPlayers stderr:", stderr);
+
+    let players;
+    try {
+      players = JSON.parse(stdout);
+    } catch (e) {
+      console.error("error JSON list_players.sh:", e, stdout);
+      return res.status(500).json({ error: "invalid response." });
+    }
+
+    return res.json({ players });
+  } catch (error) {
+    console.error("listPlayers error:", error);
+    return res
+      .status(500)
+      .json({ error: "faild to get player list." });
   }
 };
 
@@ -395,14 +427,24 @@ exports.saveMessages = async (req, res) => {
 exports.start = async (req, res) => {
   try {
     const basePath = getMinecraftPath();
-    await exec(
-      `screen -dmS minecraft_server bash -c "cd ${basePath} && LD_LIBRARY_PATH=. ./bedrock_server"`
-    );
-    return res.json({ message: "Server started" });
+
+    const logsDir = path.join(basePath, "logs");
+    if (!fs.existsSync(logsDir)) {
+      fs.mkdirSync(logsDir, { recursive: true });
+    }
+    const cmd = [
+      `cd ${basePath}`,
+      `LD_LIBRARY_PATH=. ./bedrock_server --log-json 2>&1 | tee ${path.join(
+        logsDir,
+        "latest.log"
+      )}`,
+    ].join(" && ");
+
+    await exec(`screen -dmS minecraft_server bash -c '${cmd}'`);
+
+    return res.json({ message: "Server started with JSON logging" });
   } catch (error) {
     console.error("start error:", error);
     return res.status(500).json({ error: "Failed to start server" });
   }
 };
-
-

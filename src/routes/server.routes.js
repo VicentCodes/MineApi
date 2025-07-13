@@ -8,6 +8,7 @@ router.post("/send-message", ctrl.sendMessage);
 router.post("/shutdown", ctrl.shutdown);
 router.post("/restart", ctrl.restart);
 //  (-router.post("/backup", ctrl.backup))
+router.get("/listPlayers", ctrl.listPlayers);
 
 +router.post("/backup/world", ctrl.backupWorld);
 +router.post("/backup/config", ctrl.backupConfig);

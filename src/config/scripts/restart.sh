@@ -8,6 +8,12 @@ if [ -z "$SERVER_PATH" ]; then
   exit 1
 fi
 
+LOGS_DIR="$SERVER_PATH/logs"
+LOG_FILE="$LOGS_DIR/latest.log"
+
+# Asegurarnos de que exista la carpeta de logs
+mkdir -p "$LOGS_DIR"
+
 notify() {
   screen -S "$SERVER_SCREEN" -p 0 -X stuff "say $1$(printf \\r)"
 }
@@ -28,4 +34,9 @@ while pgrep -f bedrock_server > /dev/null; do
 done
 
 cd "$SERVER_PATH" || exit 1
-screen -dmS "$SERVER_SCREEN" bash -c "LD_LIBRARY_PATH=. ./bedrock_server"
+screen -dmS "$SERVER_SCREEN" bash -c "\
+  export LD_LIBRARY_PATH=. && \
+  ./bedrock_server --log-json 2>&1 | tee \"$LOG_FILE\" \
+"
+
+echo "Server restarted (logs en $LOG_FILE)"
